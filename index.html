@@ -684,35 +684,32 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 
     isDriving = false;
 
-    // GPS停止
     if (watchId) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
 
-    // interval停止
     clearInterval(syncInterval);
     clearInterval(timerInterval);
 
-    // Firestoreから自分を削除
     if (user) {
         await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
     }
 
-    // UIを初期状態に戻す
+    // UIリセット
     document.getElementById('driver-controls').classList.add('hidden');
     document.getElementById('header-btn-end-shift').classList.add('hidden');
+
+    // オーバーレイ表示
     document.getElementById('shift-overlay').classList.remove('hidden');
 
-    // 実車UIリセット
-    document.getElementById('btn-ride-on').classList.remove('hidden');
-    document.getElementById('btn-ride-off').classList.add('hidden');
-    document.getElementById('active-timer-container').classList.add('invisible');
-
-    // シフト開始画面表示
+    // ここが重要
+    document.getElementById('auth-loading-ui').classList.add('hidden');
+    document.getElementById('registration-ui').classList.add('hidden');
     document.getElementById('start-shift-ui').classList.remove('hidden');
 };
     </script>
 </body>
 </html>
+
 
