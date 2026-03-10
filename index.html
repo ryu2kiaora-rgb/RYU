@@ -337,7 +337,7 @@
             if (!user || currentLat === null) return;
             
             // 距離が変わっていない、かつ強制更新でないならスキップ
-            if (!force && lastLat === currentLat && lastLng === currentLng) return;
+            if (!force && calcDistance(lastLat, lastLng, currentLat, currentLng) < 10) return;
 
             const todayStr = formatDate(new Date());
             const todayTotal = salesLogs.filter(l => l.dateStr === todayStr).reduce((s, l) => s + l.amount, 0);
@@ -778,6 +778,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
