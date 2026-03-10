@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fun Ride Fan</title>
+    <title>RideShare Connect Pro - Saving Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
@@ -289,10 +289,7 @@
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
-        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, activeDrivers = new Set(), timerInterval, rideStartTimestamp;
-        let lastSentTime = 0;
-        let lastSentLat = null;
-        let lastSentLng = null;
+        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = formatDate(new Date());
@@ -337,7 +334,7 @@
             if (!user || currentLat === null) return;
             
             // 距離が変わっていない、かつ強制更新でないならスキップ
-            if (!force && lastLat !== null) {     if (calcDistance(lastLat, lastLng, currentLat, currentLng) < 10) return; }
+            if (!force && lastLat === currentLat && lastLng === currentLng) return;
 
             const todayStr = formatDate(new Date());
             const todayTotal = salesLogs.filter(l => l.dateStr === todayStr).reduce((s, l) => s + l.amount, 0);
@@ -355,159 +352,51 @@
         }
 
         // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
-
-        function calcDistance(lat1, lon1, lat2, lon2){
-
-const R = 6371000;
-
-const dLat = (lat2-lat1)*Math.PI/180;
-const dLon = (lon2-lon1)*Math.PI/180;
-
-const a =
-Math.sin(dLat/2)*Math.sin(dLat/2)+
-Math.cos(lat1*Math.PI/180)*
-Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)*Math.sin(dLon/2);
-
-const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-
-return R*c;
-
-}
-function startGPS() {
-    if (!navigator.geolocation) return;
-
-    watchId = navigator.geolocation.watchPosition((pos) => {
-
-        const { latitude: lat, longitude: lng } = pos.coords;
-        currentLat = lat;
-        currentLng = lng;
-
-        if (!map) return;
-
-        if (!userMarker) {
-
-            userMarker = L.marker([lat, lng], { 
-                icon: L.divIcon({ 
-                    html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), 
-                    className: '', 
-                    iconSize:[0,0] 
-                }) 
-            }).addTo(map);
-
-            map.setView([lat, lng], 16);
-
-            syncStatusToFirestore(true);
-
-        } else {
-
-            userMarker.setLatLng([lat, lng]);
-            syncStatusToFirestore(); // ★追加
-
-        }
-
-    }, null, { enableHighAccuracy: true });
-}
+        function startGPS() {
+            if (!navigator.geolocation) return;
+            // watchPositionはUI（マップの自車位置）の更新にのみ使用
+            watchId = navigator.geolocation.watchPosition((pos) => {
+                const { latitude: lat, longitude: lng } = pos.coords;
+                currentLat = lat; currentLng = lng;
+                if (!map) return;
+                if (!userMarker) {
+                    userMarker = L.marker([lat, lng], { 
+                        icon: L.divIcon({ html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), className: '', iconSize:[0,0] }) 
+                    }).addTo(map);
+                    map.setView([lat, lng], 16);
+                    syncStatusToFirestore(true); // 初回は強制
+                } else { userMarker.setLatLng([lat, lng]); }
+            }, null, { enableHighAccuracy: true });
 
             // 書き込みを30秒ごとに制限
-syncInterval = setInterval(() => {
-
-    if(currentLat === null) return;
-
-    const now = Date.now();
-
-    if(!lastSentTime){
-        lastSentTime = now;
-        lastSentLat = currentLat;
-        lastSentLng = currentLng;
-        syncStatusToFirestore(true);
-        return;
-    }
-
-    const dist = calcDistance(
-        lastSentLat,
-        lastSentLng,
-        currentLat,
-        currentLng
-    );
-
-    if(
-        dist > 80 || 
-        now - lastSentTime > 300000
-    ){
-        lastSentTime = now;
-        lastSentLat = currentLat;
-        lastSentLng = currentLng;
-
-        syncStatusToFirestore(true);
-    }
-
-}, 15000);
-
-            }
+            syncInterval = setInterval(() => syncStatusToFirestore(), 30000);
+        }
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
-function listenToDrivers(){
-
-db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
-
-    activeDrivers.clear()
-
-    snapshot.forEach(doc => {
-
-        const data = doc.data()
-        const id = doc.id
-
-        if(id === user.uid) return
-
-        activeDrivers.add(id)
-
-        const position = [data.lat, data.lng]
-
-        if(!otherMarkers[id]){
-
-            otherMarkers[id] = L.marker(position).addTo(map)
-
-        }else{
-
-            otherMarkers[id].setLatLng(position)
-
+        function listenToDrivers() {
+            db.collection(getPublicPath('drivers')).onSnapshot(snap => {
+                const now = new Date();
+                let count = 0;
+                snap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.lat === undefined || d.lng === undefined) return;
+                    // 10分以上更新がない人はオフライン扱い
+                    const age = now - (d.updatedAt?.toDate() || now);
+                    if (age < 600000) {
+                        count++;
+                        if (user && doc.id !== user.uid && map) {
+                            const icon = L.divIcon({ html: createMarkerHtml(d.name, d.status), className: '', iconSize:[0,0] });
+                            if (otherMarkers[doc.id]) otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                            else otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
+                        }
+                    } else if (otherMarkers[doc.id]) {
+                        map.removeLayer(otherMarkers[doc.id]); delete otherMarkers[doc.id];
+                    }
+                });
+                document.getElementById('online-count').innerText = count;
+            }, (err) => console.log("Listener error", err));
         }
 
-    })
-
-    for(const id in otherMarkers){
-
-        if(!activeDrivers.has(id)){
-
-            map.removeLayer(otherMarkers[id])
-            delete otherMarkers[id]
-
-        }
-
-    }
-
-    // ★オンライン人数表示
-    document.getElementById("online-count").innerText = snapshot.size;
-
-        }
-
-    })
-
-    for(const id in otherMarkers){
-
-        if(!activeDrivers.has(id)){
-
-            map.removeLayer(otherMarkers[id])
-            delete otherMarkers[id]
-
-        }
-
-    }
-
-})
-
-}
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
         async function refreshRanking() {
             try {
@@ -790,65 +679,13 @@ db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
             }
         };
 
-document.getElementById("header-btn-end-shift").onclick = async () => {
-
-    if (!confirm("シフトを終了しますか？")) return;
-
-    console.log("シフト終了");
-
-    // ① 送信停止
-    isDriving = false;
-
-    // ② GPS停止
-    if (watchId !== null) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-    }
-
-    // ③ interval停止
-    if (syncInterval) {
-        clearInterval(syncInterval);
-        syncInterval = null;
-    }
-
-    if (timerInterval) {
-        clearInterval(timerInterval);
-        timerInterval = null;
-    }
-
-    // ④ Firebaseから削除
-    if (user) {
-        try {
-            await db.doc(`${getPublicPath("drivers")}/${user.uid}`).delete();
-        } catch(e) {
-            console.log("delete error", e);
-        }
-    }
-
-    // ⑤ UIリセット
-    document.getElementById("shift-overlay").classList.remove("hidden");
-    document.getElementById("start-shift-ui").classList.remove("hidden");
-
-    document.getElementById("driver-controls").classList.add("hidden");
-    document.getElementById("header-btn-end-shift").classList.add("hidden");
-
-};
+        document.getElementById('header-btn-end-shift').onclick = async () => {
+            if (!confirm('シフトを終了しますか？')) return;
+            isDriving = false;
+            clearInterval(syncInterval);
+            if (user) await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+            location.reload();
+        };
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
