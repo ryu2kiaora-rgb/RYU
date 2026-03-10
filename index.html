@@ -290,6 +290,9 @@
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
+        let lastSentTime = 0;
+        let lastSentLat = null;
+        let lastSentLng = null;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = formatDate(new Date());
@@ -367,10 +370,58 @@
                     syncStatusToFirestore(true); // 初回は強制
                 } else { userMarker.setLatLng([lat, lng]); }
             }, null, { enableHighAccuracy: true });
+function calcDistance(lat1, lon1, lat2, lon2){
 
+const R = 6371000;
+
+const dLat = (lat2-lat1)*Math.PI/180;
+const dLon = (lon2-lon1)*Math.PI/180;
+
+const a =
+Math.sin(dLat/2)*Math.sin(dLat/2)+
+Math.cos(lat1*Math.PI/180)*
+Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)*Math.sin(dLon/2);
+
+const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+
+return R*c;
+
+}
             // 書き込みを30秒ごとに制限
-            syncInterval = setInterval(() => syncStatusToFirestore(), 30000);
-        }
+syncInterval = setInterval(() => {
+
+    if(!isDriving) return;
+
+    const now = Date.now();
+
+    if(!lastSentTime){
+        lastSentTime = now;
+        lastSentLat = currentLat;
+        lastSentLng = currentLng;
+        syncStatusToFirestore(true);
+        return;
+    }
+
+    const dist = calcDistance(
+        lastSentLat,
+        lastSentLng,
+        currentLat,
+        currentLng
+    );
+
+    if(
+        dist > 80 || 
+        now - lastSentTime > 300000
+    ){
+        lastSentTime = now;
+        lastSentLat = currentLat;
+        lastSentLng = currentLng;
+
+        syncStatusToFirestore(true);
+    }
+
+}, 15000);
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
         function listenToDrivers() {
@@ -725,6 +776,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
