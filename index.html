@@ -679,33 +679,53 @@
             }
         };
 
-document.getElementById('header-btn-end-shift').onclick = async () => {
-    if (!confirm('シフトを終了しますか？')) return;
+document.getElementById("header-btn-end-shift").onclick = async () => {
 
+    if (!confirm("シフトを終了しますか？")) return;
+
+    console.log("シフト終了");
+
+    // ① 送信停止
     isDriving = false;
 
-    if (watchId) {
+    // ② GPS停止
+    if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
 
-    clearInterval(syncInterval);
-    clearInterval(timerInterval);
-
-    if (user) {
-        await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+    // ③ interval停止
+    if (syncInterval) {
+        clearInterval(syncInterval);
+        syncInterval = null;
     }
 
-    // UI戻す
-    document.getElementById('driver-controls').classList.add('hidden');
-    document.getElementById('header-btn-end-shift').classList.add('hidden');
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
 
-    document.getElementById('shift-overlay').classList.remove('hidden');
-    document.getElementById('start-shift-ui').classList.remove('hidden');
+    // ④ Firebaseから削除
+    if (user) {
+        try {
+            await db.doc(`${getPublicPath("drivers")}/${user.uid}`).delete();
+        } catch(e) {
+            console.log("delete error", e);
+        }
+    }
+
+    // ⑤ UIリセット
+    document.getElementById("shift-overlay").classList.remove("hidden");
+    document.getElementById("start-shift-ui").classList.remove("hidden");
+
+    document.getElementById("driver-controls").classList.add("hidden");
+    document.getElementById("header-btn-end-shift").classList.add("hidden");
+
 };
     </script>
 </body>
 </html>
+
 
 
 
