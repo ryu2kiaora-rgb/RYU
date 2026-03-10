@@ -289,7 +289,7 @@
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
-        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
+        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, activeDrivers = new Set(), timerInterval, rideStartTimestamp;
         let lastSentTime = 0;
         let lastSentLat = null;
         let lastSentLng = null;
@@ -778,6 +778,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
