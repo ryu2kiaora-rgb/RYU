@@ -432,7 +432,6 @@ function listenToDrivers(){
 
 db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
 
-    // 現在アクティブなドライバーをリセット
     activeDrivers.clear()
 
     snapshot.forEach(doc => {
@@ -440,44 +439,29 @@ db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
         const data = doc.data()
         const id = doc.id
 
-        // アクティブドライバー登録
+        if(id === user.uid) return
+
         activeDrivers.add(id)
 
-        const position = {
-            lat: data.lat,
-            lng: data.lng
-        }
+        const position = [data.lat, data.lng]
 
-        // マーカーがまだ無い場合
         if(!otherMarkers[id]){
 
-            otherMarkers[id] = L.marker([data.lat, data.lng]).addTo(map)
-                position: position,
-                map: map,
-                icon:{
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale:6,
-                    fillColor:"#00ffcc",
-                    fillOpacity:1,
-                    strokeWeight:1
-                }
-            })
+            otherMarkers[id] = L.marker(position).addTo(map)
 
         }else{
 
-            // 位置更新
-            otherMarkers[id].setPosition(position)
+            otherMarkers[id].setLatLng(position)
 
         }
 
     })
 
-    // ゴーストドライバー削除
     for(const id in otherMarkers){
 
         if(!activeDrivers.has(id)){
 
-            otherMarkers[id].setMap(null)
+            map.removeLayer(otherMarkers[id])
             delete otherMarkers[id]
 
         }
@@ -815,6 +799,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
