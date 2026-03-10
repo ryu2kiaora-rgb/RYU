@@ -468,6 +468,24 @@ db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
 
     }
 
+    // ★オンライン人数表示
+    document.getElementById("online-count").innerText = snapshot.size;
+
+        }
+
+    })
+
+    for(const id in otherMarkers){
+
+        if(!activeDrivers.has(id)){
+
+            map.removeLayer(otherMarkers[id])
+            delete otherMarkers[id]
+
+        }
+
+    }
+
 })
 
 }
@@ -799,6 +817,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
