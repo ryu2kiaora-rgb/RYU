@@ -696,20 +696,16 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
         await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
     }
 
-    // UIリセット
-    document.getElementById('driver-controls').classList.add('hidden');
-    document.getElementById('header-btn-end-shift').classList.add('hidden');
+    // ログアウト
+    await auth.signOut();
 
-    // オーバーレイ表示
+    // UI戻す
     document.getElementById('shift-overlay').classList.remove('hidden');
-
-    // ここが重要
-    document.getElementById('auth-loading-ui').classList.add('hidden');
-    document.getElementById('registration-ui').classList.add('hidden');
     document.getElementById('start-shift-ui').classList.remove('hidden');
 };
     </script>
 </body>
 </html>
+
 
 
