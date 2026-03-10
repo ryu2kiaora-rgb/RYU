@@ -355,22 +355,8 @@
         }
 
         // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
-        function startGPS() {
-            if (!navigator.geolocation) return;
-            // watchPositionはUI（マップの自車位置）の更新にのみ使用
-            watchId = navigator.geolocation.watchPosition((pos) => {
-                const { latitude: lat, longitude: lng } = pos.coords;
-                currentLat = lat; currentLng = lng;
-                if (!map) return;
-                if (!userMarker) {
-                    userMarker = L.marker([lat, lng], { 
-                        icon: L.divIcon({ html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), className: '', iconSize:[0,0] }) 
-                    }).addTo(map);
-                    map.setView([lat, lng], 16);
-                    syncStatusToFirestore(true); // 初回は強制
-                } else { userMarker.setLatLng([lat, lng]); }
-            }, null, { enableHighAccuracy: true });
-function calcDistance(lat1, lon1, lat2, lon2){
+
+        function calcDistance(lat1, lon1, lat2, lon2){
 
 const R = 6371000;
 
@@ -388,10 +374,26 @@ const c = 2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 return R*c;
 
 }
+        function startGPS() {
+            if (!navigator.geolocation) return;
+            // watchPositionはUI（マップの自車位置）の更新にのみ使用
+            watchId = navigator.geolocation.watchPosition((pos) => {
+                const { latitude: lat, longitude: lng } = pos.coords;
+                currentLat = lat; currentLng = lng;
+                if (!map) return;
+                if (!userMarker) {
+                    userMarker = L.marker([lat, lng], { 
+                        icon: L.divIcon({ html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), className: '', iconSize:[0,0] }) 
+                    }).addTo(map);
+                    map.setView([lat, lng], 16);
+                    syncStatusToFirestore(true); // 初回は強制
+                } else { userMarker.setLatLng([lat, lng]); }
+            }, null, { enableHighAccuracy: true });
+
             // 書き込みを30秒ごとに制限
 syncInterval = setInterval(() => {
 
-    if(!isDriving) return;
+    if(currentLat === null) return;
 
     const now = Date.now();
 
@@ -776,6 +778,7 @@ document.getElementById("header-btn-end-shift").onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
