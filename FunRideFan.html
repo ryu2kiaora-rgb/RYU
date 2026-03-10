@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RideShare Connect Pro - Saving Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <style>
+        #map { height: calc(100vh - 128px); width: 100%; }
+        .tab-content { display: none; height: calc(100vh - 128px); }
+        .tab-content.active { display: block; }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); }
+        
+        .driver-marker-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 80px !important; margin-left: -40px !important; margin-top: -30px !important; }
+        .status-badge { font-size: 8px; font-weight: bold; padding: 1px 4px; border-radius: 4px; color: white; white-space: nowrap; margin-bottom: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .driver-name-label { font-size: 9px; font-weight: bold; background: rgba(255, 255, 255, 0.8); padding: 0 4px; border-radius: 10px; color: #333; margin-top: 2px; border: 1px solid rgba(0,0,0,0.1); }
+        .driver-icon-inner { font-size: 20px; text-shadow: 0 0 3px #fff; transition: all 0.5s linear; }
+        
+        #shift-overlay { 
+            position: absolute; 
+            top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(15, 23, 42, 0.9); 
+            z-index: 900; display: flex; align-items: center; justify-content: center; 
+        }
+        #shift-overlay.hidden { display: none !important; }
+
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .calendar-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; border-radius: 8px; cursor: pointer; transition: all 0.2s; border: 1px solid #f3f4f6; position: relative; }
+        .calendar-day.active { background-color: #3b82f6; color: white; }
+        .calendar-day.has-data::after { content: ''; position: absolute; bottom: 4px; width: 4px; height: 4px; background: #10b981; border-radius: 50%; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        #driver-controls {
+            bottom: 80px; 
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        #edit-map { height: 300px; width: 100%; border-radius: 16px; margin-bottom: 12px; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans overflow-hidden">
+
+    <header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
+        <h1 class="text-lg font-bold">RideShare <span class="text-blue-400">Connect</span></h1>
+        <div class="flex items-center gap-2">
+            <div id="user-info" class="text-xs bg-slate-700 px-3 py-1.5 rounded-full flex items-center">
+                <i class="fas fa-user-circle mr-1 text-blue-300"></i> <span id="display-user-name">読込中...</span>
+                <span class="mx-2 text-slate-500">|</span>
+                <i class="fas fa-signal mr-1 text-green-400 text-[10px]"></i><span id="online-count">0</span>
+            </div>
+            <button id="header-btn-end-shift" class="hidden bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">
+                <i class="fas fa-power-off mr-1"></i>終了
+            </button>
+        </div>
+    </header>
+
+    <main class="relative h-[calc(100vh-128px)]">
+        
+        <!-- Home Tab -->
+        <section id="tab-home" class="tab-content active relative">
+            <div id="map"></div>
+
+            <div class="absolute top-4 left-4 z-[500]">
+                <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
+                    <p class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center">
+                        <i class="fas fa-trophy text-yellow-500 mr-1"></i> 本日TOP5
+                    </p>
+                    <div id="ranking-list" class="space-y-1 text-[10px]">
+                        <p class="text-[9px] text-gray-400 italic">読込中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="absolute top-4 right-4 z-[500] space-y-2 text-right">
+                <div class="glass-panel p-3 rounded-xl shadow-lg text-center min-w-[100px] inline-block">
+                    <p class="text-[10px] text-gray-500 font-bold uppercase">本日の売上</p>
+                    <p id="today-sales" class="text-xl font-black text-blue-600">¥0</p>
+                    <p id="today-count" class="text-[10px] text-gray-400">0回完了</p>
+                </div>
+            </div>
+
+            <!-- Start Shift UI Overlay -->
+            <div id="shift-overlay">
+                <div class="text-center p-6 w-full max-w-sm">
+                    <div id="auth-loading-ui">
+                        <i class="fas fa-circle-notch fa-spin text-4xl text-blue-500 mb-4"></i>
+                        <p id="conn-status-text" class="text-white text-sm opacity-80">位置情報・認証を確認中...</p>
+                    </div>
+
+                    <div id="registration-ui" class="hidden bg-white rounded-3xl p-8 shadow-2xl space-y-6">
+                        <div class="text-left">
+                            <h2 class="text-2xl font-black text-slate-800 mb-2">Welcome!</h2>
+                            <p class="text-sm text-slate-500">ドライバー名を入力してください。</p>
+                        </div>
+                        <input type="text" id="initial-user-name" placeholder="例: 佐藤 ドライバー" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 text-lg focus:border-blue-500 focus:outline-none transition-all">
+                        <button id="btn-submit-registration" class="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-4 rounded-2xl shadow-xl transition-transform active:scale-95">
+                            登録して開始
+                        </button>
+                    </div>
+
+                    <div id="start-shift-ui" class="hidden space-y-4">
+                        <button id="btn-start-shift" class="bg-blue-600 hover:bg-blue-700 text-white text-2xl font-black px-12 py-8 rounded-full shadow-2xl animate-pulse transition-transform active:scale-95">
+                            シフト開始
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ride Controls (Floating) -->
+            <div id="driver-controls" class="hidden absolute left-0 right-0 px-4 z-[950]">
+                <div class="glass-panel p-4 rounded-2xl shadow-2xl border-t-4 border-blue-500 flex items-center justify-between">
+                    <div id="active-timer-container" class="invisible text-left flex-1">
+                        <p class="text-[10px] text-red-500 font-bold flex items-center">実車中</p>
+                        <p id="timer-display" class="text-2xl font-mono font-bold text-gray-800">00:00</p>
+                    </div>
+                    <div class="flex-2 flex justify-center gap-4">
+                        <button id="btn-ride-on" class="bg-blue-600 text-white font-bold py-4 px-10 rounded-xl shadow-lg active:scale-95 transition-all">乗車開始</button>
+                        <button id="btn-ride-off" class="hidden bg-red-600 text-white font-bold py-4 px-10 rounded-xl shadow-lg active:scale-95 transition-all">降車完了</button>
+                    </div>
+                    <div class="flex-1"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sales Tab -->
+        <section id="tab-sales" class="tab-content overflow-y-auto p-4 custom-scrollbar bg-slate-50">
+            <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg mb-4 text-white">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col">
+                        <h3 class="text-xs font-bold text-blue-300 uppercase tracking-widest">期間サマリー</h3>
+                        <p id="period-range-text" class="text-[9px] text-slate-400 mt-0.5 tracking-tighter">00/00 〜 00/00</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">期間合計売上</p>
+                        <p id="month-total-sales" class="text-2xl font-black">¥0</p>
+                    </div>
+                    <div>
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">期間乗車数</p>
+                        <p id="month-total-count" class="text-2xl font-black">0件</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar -->
+            <div class="bg-white rounded-2xl p-4 shadow-sm mb-4 border border-slate-100">
+                <div class="flex justify-between items-center mb-4 px-2">
+                    <button onclick="changeMonth(-1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors"><i class="fas fa-chevron-left"></i></button>
+                    <h2 id="calendar-month" class="font-bold text-base text-slate-800">2024年 0月</h2>
+                    <button onclick="changeMonth(1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+            
+            <div id="today-summary-section" class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
+                <h5 id="summary-date-label" class="text-[10px] font-bold text-blue-500 uppercase mb-2">選択日の概要</h5>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                        <p class="text-[8px] text-gray-400">合計売上</p>
+                        <p id="footer-daily-total" class="text-xs font-black text-slate-800">¥0</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                        <p class="text-[8px] text-gray-400">完了回数</p>
+                        <p id="footer-daily-count" class="text-xs font-black text-slate-800">0回</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                        <p class="text-[8px] text-gray-400">平均単価</p>
+                        <p id="footer-avg-price" class="text-xs font-black text-slate-800">¥0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ride-logs" class="space-y-3 pb-20">
+                <!-- Logs rendered here -->
+            </div>
+        </section>
+
+        <!-- Settings Tab -->
+        <section id="tab-settings" class="tab-content overflow-y-auto p-6 bg-slate-50">
+            <h2 class="text-xl font-bold mb-6">設定</h2>
+            <div class="bg-white p-5 rounded-2xl shadow-sm space-y-6 max-w-md border border-slate-100 text-left">
+                <div>
+                    <label class="block text-[10px] text-slate-400 font-bold mb-1 ml-1">表示名</label>
+                    <input type="text" id="setting-user-name" class="block w-full border border-slate-200 rounded-lg p-3 text-sm outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-slate-400 font-bold mb-1 ml-1">締め日設定</label>
+                    <select id="setting-closing-day" class="block w-full border border-slate-200 rounded-lg p-3 text-sm bg-white">
+                        <option value="31">月末締め</option>
+                        <option value="1">1日締め</option>
+                        <option value="5">5日締め</option>
+                        <option value="10">10日締め</option>
+                        <option value="15">15日締め</option>
+                        <option value="20">20日締め</option>
+                        <option value="25">25日締め</option>
+                        <option value="28">28日締め</option>
+                    </select>
+                </div>
+                <button id="btn-save-settings" class="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg">設定を保存</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t h-16 flex justify-around items-center z-[1000]">
+        <button onclick="switchTab('home')" id="nav-home" class="nav-item text-blue-600 flex flex-col items-center justify-center flex-1 h-full">
+            <i class="fas fa-map-marked-alt text-lg"></i><span class="text-[10px] mt-1">ホーム</span>
+        </button>
+        <button onclick="switchTab('sales')" id="nav-sales" class="nav-item text-gray-400 flex flex-col items-center justify-center flex-1 h-full">
+            <i class="fas fa-chart-line text-lg"></i><span class="text-[10px] mt-1">売上</span>
+        </button>
+        <button onclick="switchTab('settings')" id="nav-settings" class="nav-item text-gray-400 flex flex-col items-center justify-center flex-1 h-full">
+            <i class="fas fa-cog text-lg"></i><span class="text-[10px] mt-1">設定</span>
+        </button>
+    </nav>
+
+    <!-- Payment Modal -->
+    <div id="modal-payment" class="hidden fixed inset-0 bg-black/60 z-[3000] flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold mb-4 text-center">売上金額入力</h3>
+            <div class="text-3xl font-mono text-center bg-slate-50 p-6 rounded-2xl mb-4 text-blue-600" id="input-display">¥ 0</div>
+            <div id="numpad" class="grid grid-cols-3 gap-3 mb-6"></div>
+            <div class="flex gap-3">
+                <button id="btn-pay-cancel" class="flex-1 bg-slate-100 py-4 rounded-xl font-bold" onclick="document.getElementById('modal-payment').classList.add('hidden')">戻る</button>
+                <button id="btn-pay-submit" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Log Modal -->
+    <div id="modal-edit-log" class="hidden fixed inset-0 bg-black/60 z-[4000] flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-6 w-full max-w-md max-h-[95vh] overflow-y-auto">
+            <h3 class="text-lg font-bold mb-4 text-center">乗車情報の詳細・修正</h3>
+            
+            <div class="text-[10px] text-gray-400 font-bold mb-2 flex justify-between">
+                <span>ピンをドラッグして地点を変更</span>
+                <span class="text-blue-500"><i class="fas fa-map-pin mr-1"></i>青:乗車 / 赤:降車</span>
+            </div>
+            <div id="edit-map" class="shadow-inner border border-slate-200"></div>
+
+            <div class="space-y-4 mb-6 text-left">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">乗車時刻</label>
+                        <input type="time" id="edit-time" class="w-full border border-slate-200 rounded-xl p-3 text-sm focus:border-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-slate-400 font-bold mb-1 uppercase tracking-tighter">売上金額 (¥)</label>
+                        <input type="number" id="edit-amount" class="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-blue-600 focus:border-blue-500 focus:outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button id="btn-edit-delete" class="px-5 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200 transition-colors">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+                <button id="btn-edit-cancel" class="flex-1 bg-slate-100 py-4 rounded-xl font-bold text-slate-600">戻る</button>
+                <button id="btn-edit-save" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg">更新保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDKL-O2tZZtj_MPZBqSNydZHe4NVUoZ1eI",
+            authDomain: "rideshare-7bc8e.firebaseapp.com",
+            projectId: "rideshare-7bc8e",
+            storageBucket: "rideshare-7bc8e.firebasestorage.app",
+            messagingSenderId: "949993698041",
+            appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
+        };
+        const appId = 'rideshare-connect-pro';
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // State
+        let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
+        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
+        let lastLat = null, lastLng = null;
+        let startPos = null, endPos = null; 
+        let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = formatDate(new Date());
+        let currentLat = null, currentLng = null, editingLogId = null;
+        let editStartMarker, editEndMarker;
+
+        // Path Helpers
+        const getPublicPath = (col) => `artifacts/${appId}/public/data/${col}`;
+        const getPrivatePath = (col) => user ? `artifacts/${appId}/users/${user.uid}/${col}` : null;
+
+        async function initApp() {
+            auth.onAuthStateChanged(async (u) => {
+                if (u) {
+                    user = u;
+                    initMap();
+                    initNumpad();
+                    listenToSales();
+                    listenToDrivers();
+                    refreshRanking(); // リアルタイムではなく、初回のみ手動取得
+                    document.getElementById('auth-loading-ui').classList.add('hidden');
+                    if (userName) {
+                        updateNameDisplay();
+                        document.getElementById('start-shift-ui').classList.remove('hidden');
+                    } else {
+                        document.getElementById('registration-ui').classList.remove('hidden');
+                    }
+                } else { await auth.signInAnonymously(); }
+            });
+        }
+
+        function initMap() {
+            if (map) return;
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([35.6895, 139.6917], 14);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+            editMap = L.map('edit-map', { zoomControl: false, attributionControl: false }).setView([35.6895, 139.6917], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
+        }
+
+        // [節約モード] Firebaseへの書き込みを「30秒おき」または「状態変化時」に限定
+        async function syncStatusToFirestore(force = false) {
+            if (!user || currentLat === null) return;
+            
+            // 距離が変わっていない、かつ強制更新でないならスキップ
+            if (!force && lastLat === currentLat && lastLng === currentLng) return;
+
+            const todayStr = formatDate(new Date());
+            const todayTotal = salesLogs.filter(l => l.dateStr === todayStr).reduce((s, l) => s + l.amount, 0);
+
+            try {
+                await db.doc(`${getPublicPath('drivers')}/${user.uid}`).set({
+                    name: userName || '匿名',
+                    lat: currentLat, lng: currentLng,
+                    status: isDriving ? 'occupied' : 'on',
+                    todaySales: todayTotal,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+                lastLat = currentLat; lastLng = currentLng;
+            } catch (e) {}
+        }
+
+        // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
+        function startGPS() {
+            if (!navigator.geolocation) return;
+            // watchPositionはUI（マップの自車位置）の更新にのみ使用
+            watchId = navigator.geolocation.watchPosition((pos) => {
+                const { latitude: lat, longitude: lng } = pos.coords;
+                currentLat = lat; currentLng = lng;
+                if (!map) return;
+                if (!userMarker) {
+                    userMarker = L.marker([lat, lng], { 
+                        icon: L.divIcon({ html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), className: '', iconSize:[0,0] }) 
+                    }).addTo(map);
+                    map.setView([lat, lng], 16);
+                    syncStatusToFirestore(true); // 初回は強制
+                } else { userMarker.setLatLng([lat, lng]); }
+            }, null, { enableHighAccuracy: true });
+
+            // 書き込みを30秒ごとに制限
+            syncInterval = setInterval(() => syncStatusToFirestore(), 30000);
+        }
+
+        // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
+        function listenToDrivers() {
+            db.collection(getPublicPath('drivers')).onSnapshot(snap => {
+                const now = new Date();
+                let count = 0;
+                snap.docs.forEach(doc => {
+                    const d = doc.data();
+                    if (d.lat === undefined || d.lng === undefined) return;
+                    // 10分以上更新がない人はオフライン扱い
+                    const age = now - (d.updatedAt?.toDate() || now);
+                    if (age < 600000) {
+                        count++;
+                        if (user && doc.id !== user.uid && map) {
+                            const icon = L.divIcon({ html: createMarkerHtml(d.name, d.status), className: '', iconSize:[0,0] });
+                            if (otherMarkers[doc.id]) otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                            else otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
+                        }
+                    } else if (otherMarkers[doc.id]) {
+                        map.removeLayer(otherMarkers[doc.id]); delete otherMarkers[doc.id];
+                    }
+                });
+                document.getElementById('online-count').innerText = count;
+            }, (err) => console.log("Listener error", err));
+        }
+
+        // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
+        async function refreshRanking() {
+            try {
+                const snap = await db.collection(getPublicPath('drivers')).get();
+                const rankingData = snap.docs.map(doc => doc.data())
+                    .filter(d => (new Date() - (d.updatedAt?.toDate() || 0)) < 86400000)
+                    .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0)).slice(0, 5);
+                const rankList = document.getElementById('ranking-list');
+                rankList.innerHTML = rankingData.length ? rankingData.map((d, i) => `
+                    <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
+                        <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
+                        <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
+                    </div>`).join('') : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
+            } catch(e) {}
+        }
+
+        // [節約モード] 売上ログの取得を直近30日分に制限
+        function listenToSales() {
+            const path = getPrivatePath('sales');
+            if (!path) return;
+            
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const dateLimit = formatDate(thirtyDaysAgo);
+
+            // 過去ログ全件ではなく、直近30日のデータのみを監視
+            db.collection(path)
+              .where('dateStr', '>=', dateLimit)
+              .onSnapshot(snap => {
+                salesLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                updateSalesUI();
+            });
+        }
+
+        function updateSalesUI() {
+            const now = new Date();
+            const range = getPeriodRange(now, closingDay);
+            const startStr = formatDate(range.start), endStr = formatDate(range.end);
+            const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
+            document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
+            document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === formatDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === formatDate(now)).length}回完了`;
+            renderCalendar();
+            showDailyDetail(selectedDateStr);
+            // 本日の売上が変わったので、他者へ通知するために1回送信
+            syncStatusToFirestore(true);
+        }
+
+        // Logic for Editing
+        function openEditLog(id) {
+            const log = salesLogs.find(l => l.id === id);
+            if (!log) return;
+            editingLogId = id;
+            document.getElementById('edit-time').value = log.timeStr;
+            document.getElementById('edit-amount').value = log.amount;
+            document.getElementById('modal-edit-log').classList.remove('hidden');
+
+            setTimeout(() => {
+                editMap.invalidateSize();
+                if (editStartMarker) editMap.removeLayer(editStartMarker);
+                if (editEndMarker) editMap.removeLayer(editEndMarker);
+
+                const blueIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+                const redIcon = new L.Icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+                const startCoord = log.startLat ? [log.startLat, log.startLng] : (log.lat ? [log.lat, log.lng] : [35.6895, 139.6917]);
+                const endCoord = log.endLat ? [log.endLat, log.endLng] : (log.lat ? [log.lat, log.lng] : [35.6895, 139.6917]);
+
+                editStartMarker = L.marker(startCoord, { icon: blueIcon, draggable: true }).addTo(editMap).bindPopup("乗車地点");
+                editEndMarker = L.marker(endCoord, { icon: redIcon, draggable: true }).addTo(editMap).bindPopup("降車地点");
+
+                const group = L.featureGroup([editStartMarker, editEndMarker]);
+                editMap.fitBounds(group.getBounds().pad(0.5));
+            }, 200);
+        }
+
+        // Event Handlers
+        document.getElementById('btn-edit-save').onclick = async () => {
+            const time = document.getElementById('edit-time').value;
+            const amount = parseInt(document.getElementById('edit-amount').value);
+            if (!time || isNaN(amount)) return;
+
+            const sPos = editStartMarker.getLatLng();
+            const ePos = editEndMarker.getLatLng();
+
+            const path = getPrivatePath('sales');
+            if (path && editingLogId) {
+                await db.doc(`${path}/${editingLogId}`).update({ 
+                    timeStr: time, amount,
+                    startLat: sPos.lat, startLng: sPos.lng,
+                    endLat: ePos.lat, endLng: ePos.lng,
+                    lat: sPos.lat, lng: sPos.lng
+                });
+            }
+            document.getElementById('modal-edit-log').classList.add('hidden');
+        };
+
+        document.getElementById('btn-edit-delete').onclick = async () => {
+            if (!confirm('この乗車記録を削除しますか？')) return;
+            const path = getPrivatePath('sales');
+            if (path && editingLogId) {
+                await db.doc(`${path}/${editingLogId}`).delete();
+            }
+            document.getElementById('modal-edit-log').classList.add('hidden');
+        };
+
+        document.getElementById('btn-edit-cancel').onclick = () => {
+            document.getElementById('modal-edit-log').classList.add('hidden');
+        };
+
+        document.getElementById('btn-start-shift').onclick = () => {
+            document.getElementById('shift-overlay').classList.add('hidden');
+            document.getElementById('driver-controls').classList.remove('hidden');
+            document.getElementById('header-btn-end-shift').classList.remove('hidden');
+            startGPS();
+        };
+
+        document.getElementById('btn-ride-on').onclick = () => {
+            isDriving = true; rideStartTimestamp = Date.now();
+            startPos = { lat: currentLat, lng: currentLng };
+            document.getElementById('active-timer-container').classList.remove('invisible');
+            document.getElementById('btn-ride-on').classList.add('hidden');
+            document.getElementById('btn-ride-off').classList.remove('hidden');
+            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'occupied'), className: '', iconSize:[0,0] }));
+            syncStatusToFirestore(true); // 状態変化時は即送信
+            timerInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - rideStartTimestamp)/1000);
+                document.getElementById('timer-display').innerText = `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;
+            }, 1000);
+        };
+
+        document.getElementById('btn-ride-off').onclick = () => {
+            isDriving = false; clearInterval(timerInterval);
+            endPos = { lat: currentLat, lng: currentLng };
+            document.getElementById('active-timer-container').classList.add('invisible');
+            document.getElementById('btn-ride-on').classList.remove('hidden');
+            document.getElementById('btn-ride-off').classList.add('hidden');
+            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
+            syncStatusToFirestore(true); // 状態変化時は即送信
+            document.getElementById('modal-payment').classList.remove('hidden');
+        };
+
+        document.getElementById('btn-pay-submit').onclick = async () => {
+            const amount = parseInt(currentInputAmount) || 0;
+            if (amount <= 0) return;
+            const now = new Date();
+            const data = { 
+                amount, dateStr: formatDate(now), 
+                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+                userName: userName,
+                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+            };
+            const path = getPrivatePath('sales');
+            if (path) {
+                await db.collection(path).add(data);
+                refreshRanking(); // 売上が増えたのでランキングを再取得
+            }
+            document.getElementById('modal-payment').classList.add('hidden');
+            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
+        };
+
+        // Utility UI Helpers
+        function createMarkerHtml(name, status) {
+            const color = status === 'occupied' ? '#ef4444' : '#3b82f6';
+            return `<div class="driver-marker-container">
+                <div class="status-badge" style="background:${color}">${status==='occupied'?'実車':'空車'}</div>
+                <div class="driver-icon-inner" style="color:${color}"><i class="fas fa-car-side"></i></div>
+                <div class="driver-name-label">${name || 'ドライバー'}</div>
+            </div>`;
+        }
+
+        function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+
+        function getPeriodRange(date, closing) {
+            let start, end; const y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
+            if (closing === 31) { start = new Date(y, m, 1); end = new Date(y, m + 1, 0); }
+            else { if (d > closing) { start = new Date(y, m, closing + 1); end = new Date(y, m + 1, closing); }
+                   else { start = new Date(y, m - 1, closing + 1); end = new Date(y, m, closing); } }
+            return { start, end };
+        }
+
+        function updateNameDisplay() {
+            document.getElementById('display-user-name').innerText = userName || "ドライバー";
+            document.getElementById('setting-user-name').value = userName || "";
+            document.getElementById('setting-closing-day').value = closingDay;
+        }
+
+        document.getElementById('btn-submit-registration').onclick = () => {
+            const val = document.getElementById('initial-user-name').value.trim();
+            if (!val) return;
+            userName = val; localStorage.setItem('ride_userName', userName); updateNameDisplay();
+            document.getElementById('registration-ui').classList.add('hidden');
+            document.getElementById('start-shift-ui').classList.remove('hidden');
+        };
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + tab).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.replace('text-blue-600', 'text-gray-400'));
+            document.getElementById('nav-' + tab).classList.replace('text-gray-400', 'text-blue-600');
+            if(tab === 'home' && map) setTimeout(() => map.invalidateSize(), 200);
+            if(tab === 'home') refreshRanking(); // ホームに戻るたびにランキングを更新
+        }
+
+        function initNumpad() {
+            const container = document.getElementById('numpad');
+            ["1","2","3","4","5","6","7","8","9","C","0","00"].forEach(val => {
+                const btn = document.createElement('button');
+                btn.className = "bg-slate-100 py-4 rounded-xl font-bold active:bg-slate-200 text-xl"; btn.innerText = val;
+                btn.onclick = () => {
+                    if (val === 'C') currentInputAmount = "";
+                    else if (currentInputAmount.length < 8) currentInputAmount += val;
+                    document.getElementById('input-display').innerText = `¥ ${Number(currentInputAmount).toLocaleString()}`;
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid'); if (!grid) return;
+            grid.innerHTML = ""; const year = currentViewDate.getFullYear(), month = currentViewDate.getMonth();
+            document.getElementById('calendar-month').innerText = `${year}年 ${month + 1}月`;
+            const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+            for (let d = 1; d <= daysInMonth; d++) {
+                const ds = formatDate(new Date(year, month, d));
+                const dayEl = document.createElement('div');
+                dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
+                if (salesLogs.some(l => l.dateStr === ds)) dayEl.classList.add('has-data');
+                dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
+                grid.appendChild(dayEl);
+            }
+        }
+
+        function showDailyDetail(ds) {
+            const logs = salesLogs.filter(l => l.dateStr === ds).sort((a,b) => b.timeStr.localeCompare(a.timeStr));
+            const container = document.getElementById('ride-logs'); if (!container) return;
+            document.getElementById('footer-daily-total').innerText = `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
+            document.getElementById('summary-date-label').innerText = `${ds.replace(/-/g,'/')} の概要`;
+            
+            container.innerHTML = logs.length ? logs.map(l => `
+                <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all" onclick="openEditLog('${l.id}')">
+                    <div class="flex flex-col gap-0.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.timeStr}</span>
+                            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
+                        </div>
+                        <div class="mt-1 flex items-center gap-1 text-slate-700">
+                             <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
+                             <p class="text-[11px] font-bold truncate max-w-[150px]">乗降地詳細あり</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-right">
+                            <p class="text-lg font-black text-slate-800 leading-none">¥${l.amount.toLocaleString()}</p>
+                            <p class="text-[8px] text-slate-300 font-bold uppercase mt-1 tracking-tighter">修正/削除 <i class="fas fa-pen ml-0.5"></i></p>
+                        </div>
+                    </div>
+                </div>
+            `).join('') : '<p class="text-slate-400 text-center py-10 text-xs italic">乗車記録がありません</p>';
+        }
+
+        function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
+        window.onload = initApp;
+
+        document.getElementById('btn-save-settings').onclick = async () => {
+            const newName = document.getElementById('setting-user-name').value.trim();
+            const newClosing = parseInt(document.getElementById('setting-closing-day').value);
+            if (newName) {
+                userName = newName; closingDay = newClosing;
+                localStorage.setItem('ride_userName', userName);
+                localStorage.setItem('ride_closingDay', closingDay);
+                updateNameDisplay();
+                syncStatusToFirestore(true);
+                alert('設定を保存しました');
+            }
+        };
+
+        document.getElementById('header-btn-end-shift').onclick = async () => {
+            if (!confirm('シフトを終了しますか？')) return;
+            isDriving = false;
+            clearInterval(syncInterval);
+            if (user) await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+            location.reload();
+        };
+    </script>
+</body>
+</html>
