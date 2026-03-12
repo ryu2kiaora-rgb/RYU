@@ -363,8 +363,8 @@ async function syncStatusToFirestore(force = false) {
             currentLng
         );
 
-        // 50m未満は送信しない
-        if (distance < 50) return;
+        // 80m未満は送信しない
+        if (distance < 80) return;
     }
 
     const todayStr = formatDate(new Date());
@@ -411,8 +411,8 @@ async function syncStatusToFirestore(force = false) {
                 } else { userMarker.setLatLng([lat, lng]); }
             }, null, {      enableHighAccuracy: true,     maximumAge: 5000,     timeout: 10000 });
 
-            // 書き込みを90秒ごとに制限
-            syncInterval = setInterval(() => syncStatusToFirestore(), 90000);
+            // 書き込みを180000秒ごとに制限
+            syncInterval = setInterval(() => syncStatusToFirestore(), 180000);
         }
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
@@ -768,6 +768,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
