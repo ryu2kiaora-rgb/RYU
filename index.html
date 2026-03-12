@@ -409,7 +409,7 @@ async function syncStatusToFirestore(force = false) {
                     map.setView([lat, lng], 16);
                     syncStatusToFirestore(true); // 初回は強制
                 } else { userMarker.setLatLng([lat, lng]); }
-            }, null, { enableHighAccuracy: true });
+            }, null, {      enableHighAccuracy: true,     maximumAge: 5000,     timeout: 10000 });
 
             // 書き込みを90秒ごとに制限
             syncInterval = setInterval(() => syncStatusToFirestore(), 90000);
@@ -768,6 +768,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
