@@ -751,10 +751,11 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
         userMarker = null;
     }
 
-    // 他ドライバー削除
-    if (driversLayer) {
-        driversLayer.clearLayers();
-    }
+// 他ドライバーのマーカーをすべて削除
+    Object.keys(otherMarkers).forEach(id => {
+        map.removeLayer(otherMarkers[id]);
+        delete otherMarkers[id];
+    });
 
     // 位置リセット
     currentLat = null;
@@ -768,6 +769,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
