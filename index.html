@@ -722,15 +722,52 @@ async function syncStatusToFirestore(force = false) {
             }
         };
 
-        document.getElementById('header-btn-end-shift').onclick = async () => {
-            if (!confirm('シフトを終了しますか？')) return;
-            isDriving = false;
-            clearInterval(syncInterval);
-            if (user) await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
-            location.reload();
-        };
+document.getElementById('header-btn-end-shift').onclick = async () => {
+
+    if (!confirm('シフトを終了しますか？')) return;
+
+    isDriving = false;
+
+    // Firebase同期停止
+    if (syncInterval) {
+        clearInterval(syncInterval);
+        syncInterval = null;
+    }
+
+    // GPS停止
+    if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+
+    // Firestoreから削除
+    if (user) {
+        await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+    }
+
+    // 自車マーカー削除
+    if (userMarker) {
+        map.removeLayer(userMarker);
+        userMarker = null;
+    }
+
+    // 他ドライバー削除
+    if (driversLayer) {
+        driversLayer.clearLayers();
+    }
+
+    // 位置リセット
+    currentLat = null;
+    currentLng = null;
+    lastLat = null;
+    lastLng = null;
+
+    // シフト開始オーバーレイ表示
+    document.getElementById("shift-overlay").style.display = "flex";
+};
     </script>
 </body>
 </html>
+
 
 
