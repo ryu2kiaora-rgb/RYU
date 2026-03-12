@@ -296,6 +296,25 @@
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
 
+        // ===== 位置移動距離計算（節約モード用） =====
+function calcDistance(lat1, lon1, lat2, lon2) {
+    if (!lat1 || !lat2) return 9999;
+
+    const R = 6371e3;
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+
+    const a =
+        Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    return R * c;
+}
         // Path Helpers
         const getPublicPath = (col) => `artifacts/${appId}/public/data/${col}`;
         const getPrivatePath = (col) => user ? `artifacts/${appId}/users/${user.uid}/${col}` : null;
@@ -329,27 +348,51 @@
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
         }
 
-        // [節約モード] Firebaseへの書き込みを「30秒おき」または「状態変化時」に限定
-        async function syncStatusToFirestore(force = false) {
-            if (!user || currentLat === null) return;
-            
-            // 距離が変わっていない、かつ強制更新でないならスキップ
-            if (!force && lastLat === currentLat && lastLng === currentLng) return;
+// ===== Firebase節約モード（強化版） =====
+async function syncStatusToFirestore(force = false) {
 
-            const todayStr = formatDate(new Date());
-            const todayTotal = salesLogs.filter(l => l.dateStr === todayStr).reduce((s, l) => s + l.amount, 0);
+    if (!user || currentLat === null || currentLng === null) return;
 
-            try {
-                await db.doc(`${getPublicPath('drivers')}/${user.uid}`).set({
-                    name: userName || '匿名',
-                    lat: currentLat, lng: currentLng,
-                    status: isDriving ? 'occupied' : 'on',
-                    todaySales: todayTotal,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true });
-                lastLat = currentLat; lastLng = currentLng;
-            } catch (e) {}
-        }
+    // 前回位置との差
+    if (!force && lastLat !== null && lastLng !== null) {
+
+        const distance = calcDistance(
+            lastLat,
+            lastLng,
+            currentLat,
+            currentLng
+        );
+
+        // 50m未満は送信しない
+        if (distance < 50) return;
+    }
+
+    const todayStr = formatDate(new Date());
+
+    const todayTotal = salesLogs
+        .filter(l => l.dateStr === todayStr)
+        .reduce((s, l) => s + l.amount, 0);
+
+    try {
+
+        await db
+            .doc(`${getPublicPath('drivers')}/${user.uid}`)
+            .set({
+                name: userName || "匿名",
+                lat: currentLat,
+                lng: currentLng,
+                status: isDriving ? "occupied" : "on",
+                todaySales: todayTotal,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+        lastLat = currentLat;
+        lastLng = currentLng;
+
+    } catch (e) {
+        console.log("sync error", e);
+    }
+}
 
         // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
         function startGPS() {
@@ -369,7 +412,7 @@
             }, null, { enableHighAccuracy: true });
 
             // 書き込みを30秒ごとに制限
-            syncInterval = setInterval(() => syncStatusToFirestore(), 30000);
+            syncInterval = setInterval(() => syncStatusToFirestore(), 90000);
         }
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
@@ -689,3 +732,4 @@
     </script>
 </body>
 </html>
+
