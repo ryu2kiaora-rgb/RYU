@@ -292,7 +292,7 @@
         let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
-        let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = formatDate(new Date());
+        let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
 
@@ -781,6 +781,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
