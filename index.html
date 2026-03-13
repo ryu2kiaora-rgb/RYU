@@ -367,7 +367,7 @@ async function syncStatusToFirestore(force = false) {
         if (distance < 80) return;
     }
 
-    const todayStr = formatDate(new Date());
+    const todayStr = getBusinessDate(new Date());
 
     const todayTotal = salesLogs
         .filter(l => l.dateStr === todayStr)
@@ -481,8 +481,8 @@ async function syncStatusToFirestore(force = false) {
             const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
             document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
             document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
-            document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === formatDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-            document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === formatDate(now)).length}回完了`;
+            document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).length}回完了`;
             renderCalendar();
             showDailyDetail(selectedDateStr);
             // 本日の売上が変わったので、他者へ通知するために1回送信
@@ -588,7 +588,7 @@ async function syncStatusToFirestore(force = false) {
             if (amount <= 0) return;
             const now = new Date();
             const data = { 
-                amount, dateStr: formatDate(now), 
+                amount, dateStr: getBusinessDate(now), 
                 timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
                 userName: userName,
                 lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
@@ -615,6 +615,18 @@ async function syncStatusToFirestore(force = false) {
         }
 
         function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+        // ===== 営業日（昼12時区切り） =====
+function getBusinessDate(date){
+
+    const d = new Date(date);
+
+    // 12時より前なら前日扱い
+    if(d.getHours() < 12){
+        d.setDate(d.getDate() - 1);
+    }
+
+    return formatDate(d);
+}
 
         function getPeriodRange(date, closing) {
             let start, end; const y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
@@ -769,6 +781,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
