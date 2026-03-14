@@ -348,7 +348,7 @@ function calcDistance(lat1, lon1, lat2, lon2) {
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
         }
 
-// ===== Firebase節約モード（強化版） =====
+// ===== Firebase節約モード（改良版） =====
 async function syncStatusToFirestore(force = false) {
 
     if (!user || currentLat === null || currentLng === null) return;
@@ -363,8 +363,8 @@ async function syncStatusToFirestore(force = false) {
             currentLng
         );
 
-        // 80m未満は送信しない
-        if (distance < 80) return;
+        // 30m未満は送信しない（80m→改善）
+        if (distance < 30) return;
     }
 
     const todayStr = getBusinessDate(new Date());
@@ -378,7 +378,6 @@ async function syncStatusToFirestore(force = false) {
         await db
             .doc(`${getPublicPath('drivers')}/${user.uid}`)
             .set({
-                name: userName || "匿名",
                 lat: currentLat,
                 lng: currentLng,
                 status: isDriving ? "occupied" : "on",
@@ -393,27 +392,79 @@ async function syncStatusToFirestore(force = false) {
         console.log("sync error", e);
     }
 }
+// [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
+function startGPS() {
 
-        // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
-        function startGPS() {
-            if (!navigator.geolocation) return;
-            // watchPositionはUI（マップの自車位置）の更新にのみ使用
-            watchId = navigator.geolocation.watchPosition((pos) => {
-                const { latitude: lat, longitude: lng } = pos.coords;
-                currentLat = lat; currentLng = lng;
-                if (!map) return;
-                if (!userMarker) {
-                    userMarker = L.marker([lat, lng], { 
-                        icon: L.divIcon({ html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'), className: '', iconSize:[0,0] }) 
-                    }).addTo(map);
-                    map.setView([lat, lng], 16);
-                    syncStatusToFirestore(true); // 初回は強制
-                } else { userMarker.setLatLng([lat, lng]); }
-            }, null, {      enableHighAccuracy: true,     maximumAge: 5000,     timeout: 10000 });
+    if (!navigator.geolocation) return;
 
-            // 書き込みを180000秒ごとに制限
-            syncInterval = setInterval(() => syncStatusToFirestore(), 180000);
+    // watchPositionはUI（マップの自車位置）の更新にのみ使用
+    watchId = navigator.geolocation.watchPosition((pos) => {
+
+        // GPS精度が悪い場合は無視（iPhone対策）
+        if (pos.coords.accuracy > 80) return;
+
+        const { latitude: lat, longitude: lng } = pos.coords;
+
+        currentLat = lat;
+        currentLng = lng;
+
+        if (!map) return;
+
+        if (!userMarker) {
+
+            userMarker = L.marker([lat, lng], { 
+                icon: L.divIcon({
+                    html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'),
+                    className: '',
+                    iconSize:[0,0]
+                }) 
+            }).addTo(map);
+
+            map.setView([lat, lng], 16);
+
+            syncStatusToFirestore(true); // 初回は強制
+
+        } else {
+
+            userMarker.setLatLng([lat, lng]);
+
         }
+
+    }, (err) => {
+
+        console.log("GPS error", err);
+
+    }, {
+
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 20000
+
+    });
+
+    // 書き込みを60秒ごとに制限
+    syncInterval = setInterval(() => syncStatusToFirestore(), 60000);
+
+}
+
+
+// iPhone対策：画面復帰時にGPS再取得
+document.addEventListener("visibilitychange", () => {
+
+    if (!document.hidden && navigator.geolocation) {
+
+        navigator.geolocation.getCurrentPosition((pos) => {
+
+            currentLat = pos.coords.latitude;
+            currentLng = pos.coords.longitude;
+
+            syncStatusToFirestore(true);
+
+        });
+
+    }
+
+});
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
         function listenToDrivers() {
