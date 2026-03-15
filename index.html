@@ -818,9 +818,8 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 
     currentLat = null; currentLng = null; lastLat = null; lastLng = null;
 
-    // 5. UIの切り替え
-    document.getElementById('driver-controls').classList.add('hidden');
-    document.getElementById('header-btn-end-shift').classList.add('hidden');
+
+    // 5. オーバーレイ（開始画面）への復帰
     document.getElementById("shift-overlay").style.display = "flex";
 };
     </script>
