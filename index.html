@@ -64,6 +64,13 @@
         <section id="tab-home" class="tab-content active relative">
             <div id="map"></div>
 
+                        <!-- 現在地ボタンの追加 -->
+            <div class="absolute top-4 right-4 z-[500] flex flex-col space-y-2">
+                <button id="btn-recenter" class="bg-white p-3 rounded-full shadow-lg text-blue-600 hover:bg-blue-50 active:scale-95 transition-transform">
+                    <i class="fas fa-location-crosshairs text-xl"></i>
+                </button>
+            </div>
+
             <div class="absolute top-4 left-4 z-[500]">
                 <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
                     <p class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center">
@@ -347,6 +354,16 @@ function calcDistance(lat1, lon1, lat2, lon2) {
             editMap = L.map('edit-map', { zoomControl: false, attributionControl: false }).setView([35.6895, 139.6917], 15);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
         }
+
+                // ===== 現在地ボタンの追加コード =====
+        document.getElementById('btn-recenter').onclick = () => {
+            if (userMarker) {
+                const latlng = userMarker.getLatLng();
+                map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
+            } else {
+                alert("位置情報を取得中です。開始までお待ちください。");
+            }
+        };
 
 // ===== Firebase節約モード（改良版） =====
 async function syncStatusToFirestore(force = false) {
