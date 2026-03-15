@@ -789,47 +789,38 @@ function getBusinessDate(date){
         };
 
 document.getElementById('header-btn-end-shift').onclick = async () => {
-
     if (!confirm('シフトを終了しますか？')) return;
 
+    // 1. 状態フラグの更新
     isDriving = false;
 
-    // Firebase同期停止
-    if (syncInterval) {
-        clearInterval(syncInterval);
-        syncInterval = null;
-    }
+    // 2. 監視系の停止
+    if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
-    // GPS停止
-    if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-    }
-
-    // Firestoreから削除
+    // 3. Firestore削除処理（エラーをキャッチして処理を止めない）
     if (user) {
-        await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+        try {
+            await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+            console.log("ドライバーデータを削除しました");
+        } catch (e) {
+            console.error("Firestore削除エラー:", e);
+            // 権限エラーでもUIはリセットしたい場合、ここはあえて空にするかログ出力のみに留めます
+        }
     }
 
-    // 自車マーカー削除
-    if (userMarker) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-    }
-
-// 他ドライバーのマーカーをすべて削除
+    // 4. マーカーと変数のクリーンアップ
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
     Object.keys(otherMarkers).forEach(id => {
         map.removeLayer(otherMarkers[id]);
         delete otherMarkers[id];
     });
 
-    // 位置リセット
-    currentLat = null;
-    currentLng = null;
-    lastLat = null;
-    lastLng = null;
+    currentLat = null; currentLng = null; lastLat = null; lastLng = null;
 
-    // シフト開始オーバーレイ表示
+    // 5. UIの切り替え
+    document.getElementById('driver-controls').classList.add('hidden');
+    document.getElementById('header-btn-end-shift').classList.add('hidden');
     document.getElementById("shift-overlay").style.display = "flex";
 };
     </script>
