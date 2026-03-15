@@ -642,7 +642,7 @@ document.addEventListener("visibilitychange", () => {
                 amount, dateStr: getBusinessDate(now), 
                 timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
                 pickupTime: rideStartTimestamp,
-                dropoffTime: firebase.firestore.FieldValue.serverTimestamp),
+                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
                 userName: userName,
                 lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
                 startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
