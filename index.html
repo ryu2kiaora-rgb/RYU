@@ -64,13 +64,6 @@
         <section id="tab-home" class="tab-content active relative">
             <div id="map"></div>
 
-                        <!-- 現在地ボタンの追加 -->
-            <div class="absolute top-4 right-4 z-[500] flex flex-col space-y-2">
-                <button id="btn-recenter" class="bg-white p-3 rounded-full shadow-lg text-blue-600 hover:bg-blue-50 active:scale-95 transition-transform">
-                    <i class="fas fa-location-crosshairs text-xl"></i>
-                </button>
-            </div>
-
             <div class="absolute top-4 left-4 z-[500]">
                 <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
                     <p class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center">
@@ -82,12 +75,20 @@
                 </div>
             </div>
 
-            <div class="absolute top-4 right-4 z-[500] space-y-2 text-right">
-                <div class="glass-panel p-3 rounded-xl shadow-lg text-center min-w-[100px] inline-block">
-                    <p class="text-[10px] text-gray-500 font-bold uppercase">本日の売上</p>
-                    <p id="today-sales" class="text-xl font-black text-blue-600">¥0</p>
-                    <p id="today-count" class="text-[10px] text-gray-400">0回完了</p>
-                </div>
+            <div class="absolute top-4 right-4 z-[500] flex flex-col items-end gap-2">
+    
+    <div class="glass-panel p-3 rounded-xl shadow-lg text-center min-w-[100px]">
+        <p class="text-[10px] text-gray-500 font-bold uppercase">本日の売上</p>
+        <p id="today-sales" class="text-xl font-black text-blue-600">¥0</p>
+        <p id="today-count" class="text-[10px] text-gray-400">0回完了</p>
+    </div>
+
+    <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
+        <i class="fas fa-location-crosshairs text-lg"></i>
+    </button>
+</div>
+
+
             </div>
 
             <!-- Start Shift UI Overlay -->
@@ -789,7 +790,19 @@ function getBusinessDate(date){
             `).join('') : '<p class="text-slate-400 text-center py-10 text-xs italic">乗車記録がありません</p>';
         }
 
-        function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
+function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
+        
+        // --- ここに追加しました ---
+        document.getElementById('btn-recenter').onclick = () => {
+            if (userMarker) {
+                const latlng = userMarker.getLatLng();
+                map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
+            } else {
+                alert("現在地を取得中です...");
+            }
+        };
+        // -----------------------
+
         window.onload = initApp;
 
         document.getElementById('btn-save-settings').onclick = async () => {
@@ -798,7 +811,7 @@ function getBusinessDate(date){
             if (newName) {
                 userName = newName; closingDay = newClosing;
                 localStorage.setItem('ride_userName', userName);
-                localStorage.setItem('ride_closingDay', closingDay);
+                localStorage.setItem('ride_closingDay', newClosing);
                 updateNameDisplay();
                 syncStatusToFirestore(true);
                 alert('設定を保存しました');
