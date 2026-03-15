@@ -378,6 +378,7 @@ async function syncStatusToFirestore(force = false) {
         await db
             .doc(`${getPublicPath('drivers')}/${user.uid}`)
             .set({
+                name: userName,
                 lat: currentLat,
                 lng: currentLng,
                 status: isDriving ? "occupied" : "on",
