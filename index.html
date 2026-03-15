@@ -548,6 +548,14 @@ document.addEventListener("visibilitychange", () => {
             const now = new Date();
             const range = getPeriodRange(now, closingDay);
             const startStr = formatDate(range.start), endStr = formatDate(range.end);
+
+            // --- ここを追加 ---
+            // 表示用に「月/日」の形式に変換して反映
+            const displayStart = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
+            const displayEnd = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
+            document.getElementById('period-range-text').innerText = `${displayStart} 〜 ${displayEnd}`;
+            // ------------------
+            
             const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
             document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
             document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
