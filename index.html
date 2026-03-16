@@ -4,10 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RideShare Connect Pro - Saving Mode</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+
     <style>
         #map { height: calc(100vh - 128px); width: 100%; }
         .tab-content { display: none; height: calc(100vh - 128px); }
@@ -731,7 +735,12 @@ function getBusinessDate(date){
 
         function updateNameDisplay() {
             document.getElementById('display-user-name').innerText = userName || "ドライバー";
-            // ===== GASへ乗車ログ送信 =====
+
+            document.getElementById('setting-user-name').value = userName || "";
+            document.getElementById('setting-closing-day').value = closingDay;
+        }
+
+        // ===== GASへ乗車ログ送信 =====
 async function sendRideToGAS(data){
 
 try{
@@ -768,10 +777,10 @@ body:JSON.stringify(payload)
 console.log("GAS送信エラー",e);
 
 }
-    
+
 }
-            
-async function toggleHeatMap(){
+
+        async function toggleHeatMap(){
 
 heatEnabled = !heatEnabled;
 
@@ -786,40 +795,11 @@ return;
 }
 
 const res = await fetch(GAS_API+"?mode=heat");
-
 const data = await res.json();
 
 drawHeatMap(data);
 
 }
-
-function drawHeatMap(data){
-
-if(heatLayer){
-map.removeLayer(heatLayer);
-}
-
-const points = data.map(d=>[
-d.lat,
-d.lng,
-0.6
-]);
-
-heatLayer = L.heatLayer(points,{
-radius:25,
-blur:18
-}).addTo(map);
-
-}
-
-document
-.getElementById("btn-heat-toggle")
-.onclick = toggleHeatMap;
-}
-            document.getElementById('setting-user-name').value = userName || "";
-            document.getElementById('setting-closing-day').value = closingDay;
-        }
-
         document.getElementById('btn-submit-registration').onclick = () => {
             const val = document.getElementById('initial-user-name').value.trim();
             if (!val) return;
