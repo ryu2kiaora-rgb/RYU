@@ -797,8 +797,7 @@ const payload = {
 
 type:type,
 
-// ★ここ重要
-logId:data.id || data.logId || editingLogId || "",
+logId:data.id || editingLogId || "",
 
 driverId:user?.uid || "",
 driverName:userName || "",
@@ -816,10 +815,8 @@ dropTime:data.dropTime || Date.now(),
 fare:data.amount,
 
 weekday:new Date().getDay(),
-hour:new Date().getHours),
-
-minute:new Date().getMinutes() // ★追加
-
+hour:new Date().getHours(),
+minute:new Date().getMinutes()
 
 };
 
