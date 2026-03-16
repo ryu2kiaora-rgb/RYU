@@ -4,14 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RideShare Connect Pro - Saving Mode</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
-
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
         #map { height: calc(100vh - 128px); width: 100%; }
         .tab-content { display: none; height: calc(100vh - 128px); }
@@ -90,9 +85,6 @@
 
     <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
         <i class="fas fa-location-crosshairs text-lg"></i>
-        <button id="btn-heat-toggle"
-class="w-10 h-10 bg-white rounded-xl shadow-lg">
-🔥
     </button>
 </div>
 
@@ -302,14 +294,6 @@ class="w-10 h-10 bg-white rounded-xl shadow-lg">
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-                // ===== GAS設定 =====
-const GAS_API = "https://script.google.com/macros/s/AKfycbxetn4PFfHlWTdTilRdW9lwdMSzGD2arruNqZIM5T9f9CH3o6aJVB-c7bhR5LmcuRHE/exec";
-
-// ===== ヒートマップ =====
-let heatLayer = null;
-let heatEnabled = false;
-
-
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
@@ -694,7 +678,6 @@ document.addEventListener("visibilitychange", () => {
             const path = getPrivatePath('sales');
             if (path) {
                 await db.collection(path).add(data);
-                sendRideToGAS(data);
                 refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
@@ -735,71 +718,10 @@ function getBusinessDate(date){
 
         function updateNameDisplay() {
             document.getElementById('display-user-name').innerText = userName || "ドライバー";
-
             document.getElementById('setting-user-name').value = userName || "";
             document.getElementById('setting-closing-day').value = closingDay;
         }
 
-        // ===== GASへ乗車ログ送信 =====
-async function sendRideToGAS(data){
-
-try{
-
-const payload = {
-
-driverId:user?.uid || "",
-driverName:userName || "",
-
-pickupLat:data.startLat,
-pickupLng:data.startLng,
-
-pickupTime:data.pickupTime,
-
-dropLat:data.endLat,
-dropLng:data.endLng,
-
-dropTime:Date.now(),
-
-fare:data.amount,
-
-weekday:new Date().getDay(),
-hour:new Date().getHours()
-
-};
-
-fetch(GAS_API,{
-method:"POST",
-body:JSON.stringify(payload)
-});
-
-}catch(e){
-
-console.log("GAS送信エラー",e);
-
-}
-
-}
-
-        async function toggleHeatMap(){
-
-heatEnabled = !heatEnabled;
-
-if(!heatEnabled){
-
-if(heatLayer){
-map.removeLayer(heatLayer);
-}
-
-return;
-
-}
-
-const res = await fetch(GAS_API+"?mode=heat");
-const data = await res.json();
-
-drawHeatMap(data);
-
-}
         document.getElementById('btn-submit-registration').onclick = () => {
             const val = document.getElementById('initial-user-name').value.trim();
             if (!val) return;
@@ -941,7 +863,6 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
-
 
 
 
