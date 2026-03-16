@@ -731,15 +731,21 @@ document.getElementById('btn-edit-save').onclick = async () => {
             if (amount <= 0) return;
             const now = new Date();
             const data = { 
-                amount, dateStr: getBusinessDate(now), 
-                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-                pickupTime: rideStartTimestamp,
-                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-                userName: userName,
-                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
-                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
-                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
-            };
+
+    id: Date.now().toString(),
+
+    amount, dateStr: getBusinessDate(now), 
+    timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+    pickupTime: rideStartTimestamp,
+    dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+    userName: userName,
+    lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+    startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+    endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+};
+
+sendRideToGAS(data,"add");
+            
             const path = getPrivatePath('sales');
             if (path) {
                 await db.collection(path).add(data);
