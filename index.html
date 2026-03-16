@@ -586,6 +586,9 @@ document.addEventListener("visibilitychange", () => {
             const log = salesLogs.find(l => l.id === id);
             if (!log) return;
             editingLogId = id;
+                // ★追加（GAS用ログ保持）
+    editingRideData = log;
+            
             document.getElementById('edit-time').value = log.timeStr;
             document.getElementById('edit-amount').value = log.amount;
             document.getElementById('modal-edit-log').classList.remove('hidden');
@@ -610,34 +613,81 @@ document.addEventListener("visibilitychange", () => {
         }
 
         // Event Handlers
-        document.getElementById('btn-edit-save').onclick = async () => {
-            const time = document.getElementById('edit-time').value;
-            const amount = parseInt(document.getElementById('edit-amount').value);
-            if (!time || isNaN(amount)) return;
+document.getElementById('btn-edit-save').onclick = async () => {
 
-            const sPos = editStartMarker.getLatLng();
-            const ePos = editEndMarker.getLatLng();
+    const time = document.getElementById('edit-time').value;
+    const amount = parseInt(document.getElementById('edit-amount').value);
 
-            const path = getPrivatePath('sales');
-            if (path && editingLogId) {
-                await db.doc(`${path}/${editingLogId}`).update({ 
-                    timeStr: time, amount,
-                    startLat: sPos.lat, startLng: sPos.lng,
-                    endLat: ePos.lat, endLng: ePos.lng,
-                    lat: sPos.lat, lng: sPos.lng
-                });
-            }
-            document.getElementById('modal-edit-log').classList.add('hidden');
+    if (!time || isNaN(amount)) return;
+
+    const sPos = editStartMarker.getLatLng();
+    const ePos = editEndMarker.getLatLng();
+
+    const path = getPrivatePath('sales');
+
+    if (path && editingLogId) {
+
+        // ===== Firestore更新 =====
+        await db.doc(`${path}/${editingLogId}`).update({ 
+            timeStr: time,
+            amount,
+            startLat: sPos.lat,
+            startLng: sPos.lng,
+            endLat: ePos.lat,
+            endLng: ePos.lng,
+            lat: sPos.lat,
+            lng: sPos.lng
+        });
+
+        // ===== GAS更新 =====
+
+        // 古いログ削除
+        sendRideToGAS(editingRideData,"delete");
+
+        // 新しいログ作成
+        const newData = {
+            ...editingRideData,
+            timeStr: time,
+            amount: amount,
+            startLat: sPos.lat,
+            startLng: sPos.lng,
+            endLat: ePos.lat,
+            endLng: ePos.lng
         };
+
+        // 新ログ追加
+        sendRideToGAS(newData,"add");
+
+    }
+
+    document.getElementById('modal-edit-log').classList.add('hidden');
+
+};
+
 
         document.getElementById('btn-edit-delete').onclick = async () => {
-            if (!confirm('この乗車記録を削除しますか？')) return;
-            const path = getPrivatePath('sales');
-            if (path && editingLogId) {
-                await db.doc(`${path}/${editingLogId}`).delete();
-            }
-            document.getElementById('modal-edit-log').classList.add('hidden');
-        };
+
+    if (!confirm('この乗車記録を削除しますか？')) return;
+
+    const path = getPrivatePath('sales');
+
+    if (path && editingLogId) {
+
+        // ===== Firestore削除 =====
+        await db.doc(`${path}/${editingLogId}`).delete();
+
+        // ===== GAS削除 =====
+        if(editingRideData){
+            sendRideToGAS(editingRideData,"delete");
+        }
+
+    }
+
+    document.getElementById('modal-edit-log').classList.add('hidden');
+
+};
+
+
 
         document.getElementById('btn-edit-cancel').onclick = () => {
             document.getElementById('modal-edit-log').classList.add('hidden');
