@@ -678,7 +678,7 @@ document.getElementById('btn-edit-save').onclick = async () => {
 
         // ===== GAS削除 =====
         if(editingRideData){
-            sendRideToGAS(editingRideData,"delete");
+            sendRideToGAS({id:editingLogId},"delete");
             sendRideToGAS(newData,"add");
         }
 
@@ -715,36 +715,51 @@ document.getElementById('btn-edit-save').onclick = async () => {
             }, 1000);
         };
 
-        document.getElementById('btn-ride-off').onclick = () => {
-            isDriving = false; clearInterval(timerInterval);
-            endPos = { lat: currentLat, lng: currentLng };
-            document.getElementById('active-timer-container').classList.add('invisible');
-            document.getElementById('btn-ride-on').classList.remove('hidden');
-            document.getElementById('btn-ride-off').classList.add('hidden');
-            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
-            syncStatusToFirestore(true); // 状態変化時は即送信
-            document.getElementById('modal-payment').classList.remove('hidden');
-        };
-
         document.getElementById('btn-pay-submit').onclick = async () => {
-            const amount = parseInt(currentInputAmount) || 0;
-            if (amount <= 0) return;
-            const now = new Date();
-            const data = { 
 
-    id: Date.now().toString(),
+const amount = parseInt(currentInputAmount) || 0;
+if (amount <= 0) return;
 
-    amount, dateStr: getBusinessDate(now), 
-    timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+const now = new Date();
+
+const data = { 
+    amount,
+    dateStr: getBusinessDate(now),
+    timeStr: now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+
     pickupTime: rideStartTimestamp,
-    dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+    dropTime: Date.now(),
+
     userName: userName,
-    lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
-    startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
-    endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+
+    lat: startPos?.lat || currentLat,
+    lng: startPos?.lng || currentLng,
+
+    startLat: startPos?.lat || currentLat,
+    startLng: startPos?.lng || currentLng,
+
+    endLat: endPos?.lat || currentLat,
+    endLng: endPos?.lng || currentLng
 };
 
-sendRideToGAS(data,"add");
+const path = getPrivatePath('sales');
+
+if(path){
+
+    // ① Firestore保存
+    const docRef = await db.collection(path).add(data);
+
+    // ② ID取得
+    data.id = docRef.id;
+
+    // ③ GAS送信
+    sendRideToGAS(data,"add");
+
+}
+
+};
+
+
             
             const path = getPrivatePath('sales');
             if (path) {
