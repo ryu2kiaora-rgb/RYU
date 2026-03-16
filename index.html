@@ -723,6 +723,7 @@ if (amount <= 0) return;
 const now = new Date();
 
 const data = { 
+
     amount,
     dateStr: getBusinessDate(now),
     timeStr: now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
@@ -744,16 +745,19 @@ const data = {
 
 const path = getPrivatePath('sales');
 
-if(path){
+if (path) {
 
-    // ① Firestore保存
+    // Firestore保存
     const docRef = await db.collection(path).add(data);
 
-    // ② ID取得
+    // FirestoreのIDをログIDにする
     data.id = docRef.id;
 
-    // ③ GAS送信
+    // GAS送信（1回だけ）
     sendRideToGAS(data,"add");
+
+    refreshRanking();
+}
 
 }
 
