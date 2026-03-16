@@ -769,16 +769,6 @@ document.getElementById('input-display').innerText="¥ 0";
 };
 
 
-            
-            const path = getPrivatePath('sales');
-            if (path) {
-                await db.collection(path).add(data);
-                sendRideToGAS(data);
-                refreshRanking(); // 売上が増えたのでランキングを再取得
-            }
-            document.getElementById('modal-payment').classList.add('hidden');
-            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
-        };
 
         // Utility UI Helpers
         function createMarkerHtml(name, status) {
