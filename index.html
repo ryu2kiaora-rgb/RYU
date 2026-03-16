@@ -715,7 +715,7 @@ document.getElementById('btn-edit-save').onclick = async () => {
             }, 1000);
         };
 
-        document.getElementById('btn-pay-submit').onclick = async () => {
+document.getElementById('btn-pay-submit').onclick = async () => {
 
 const amount = parseInt(currentInputAmount) || 0;
 if (amount <= 0) return;
@@ -724,23 +724,25 @@ const now = new Date();
 
 const data = { 
 
-    amount,
-    dateStr: getBusinessDate(now),
-    timeStr: now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+amount,
+dateStr: getBusinessDate(now),
 
-    pickupTime: rideStartTimestamp,
-    dropTime: Date.now(),
+timeStr: now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
 
-    userName: userName,
+pickupTime: rideStartTimestamp,
+dropTime: Date.now(),
 
-    lat: startPos?.lat || currentLat,
-    lng: startPos?.lng || currentLng,
+userName: userName,
 
-    startLat: startPos?.lat || currentLat,
-    startLng: startPos?.lng || currentLng,
+lat: startPos?.lat || currentLat,
+lng: startPos?.lng || currentLng,
 
-    endLat: endPos?.lat || currentLat,
-    endLng: endPos?.lng || currentLng
+startLat: startPos?.lat || currentLat,
+startLng: startPos?.lng || currentLng,
+
+endLat: endPos?.lat || currentLat,
+endLng: endPos?.lng || currentLng
+
 };
 
 const path = getPrivatePath('sales');
@@ -759,7 +761,10 @@ if (path) {
     refreshRanking();
 }
 
-}
+document.getElementById('modal-payment').classList.add('hidden');
+
+currentInputAmount="";
+document.getElementById('input-display').innerText="¥ 0";
 
 };
 
