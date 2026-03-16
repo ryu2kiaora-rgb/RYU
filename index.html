@@ -679,6 +679,7 @@ document.getElementById('btn-edit-save').onclick = async () => {
         // ===== GAS削除 =====
         if(editingRideData){
             sendRideToGAS(editingRideData,"delete");
+            sendRideToGAS(newData,"add");
         }
 
     }
@@ -788,11 +789,16 @@ function getBusinessDate(date){
         }
 
         // ===== GASへ乗車ログ送信 =====
-async function sendRideToGAS(data){
+async function sendRideToGAS(data,type="add"){
 
 try{
 
 const payload = {
+
+type:type,
+
+// ★ここ重要
+logId:data.id || data.logId || editingLogId || "",
 
 driverId:user?.uid || "",
 driverName:userName || "",
@@ -805,12 +811,15 @@ pickupTime:data.pickupTime,
 dropLat:data.endLat,
 dropLng:data.endLng,
 
-dropTime:Date.now(),
+dropTime:data.dropTime || Date.now(),
 
 fare:data.amount,
 
 weekday:new Date().getDay(),
-hour:new Date().getHours()
+hour:new Date().getHours),
+
+minute:new Date().getMinutes() // ★追加
+
 
 };
 
