@@ -678,7 +678,7 @@ document.getElementById('btn-edit-save').onclick = async () => {
 
         // ===== GAS削除 =====
         if(editingRideData){
-            sendRideToGAS({id:editingLogId},"delete");
+            sendRideToGAS(editingRideData,"delete");
             sendRideToGAS(newData,"add");
         }
 
@@ -715,60 +715,40 @@ document.getElementById('btn-edit-save').onclick = async () => {
             }, 1000);
         };
 
-document.getElementById('btn-pay-submit').onclick = async () => {
+        document.getElementById('btn-ride-off').onclick = () => {
+            isDriving = false; clearInterval(timerInterval);
+            endPos = { lat: currentLat, lng: currentLng };
+            document.getElementById('active-timer-container').classList.add('invisible');
+            document.getElementById('btn-ride-on').classList.remove('hidden');
+            document.getElementById('btn-ride-off').classList.add('hidden');
+            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
+            syncStatusToFirestore(true); // 状態変化時は即送信
+            document.getElementById('modal-payment').classList.remove('hidden');
+        };
 
-const amount = parseInt(currentInputAmount) || 0;
-if (amount <= 0) return;
-
-const now = new Date();
-
-const data = { 
-
-amount,
-dateStr: getBusinessDate(now),
-
-timeStr: now.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
-
-pickupTime: rideStartTimestamp,
-dropTime: Date.now(),
-
-userName: userName,
-
-lat: startPos?.lat || currentLat,
-lng: startPos?.lng || currentLng,
-
-startLat: startPos?.lat || currentLat,
-startLng: startPos?.lng || currentLng,
-
-endLat: endPos?.lat || currentLat,
-endLng: endPos?.lng || currentLng
-
-};
-
-const path = getPrivatePath('sales');
-
-if (path) {
-
-    // Firestore保存
-    const docRef = await db.collection(path).add(data);
-
-    // FirestoreのIDをログIDにする
-    data.id = docRef.id;
-
-    // GAS送信（1回だけ）
-    sendRideToGAS(data,"add");
-
-    refreshRanking();
-}
-
-document.getElementById('modal-payment').classList.add('hidden');
-
-currentInputAmount="";
-document.getElementById('input-display').innerText="¥ 0";
-
-};
-
-
+        document.getElementById('btn-pay-submit').onclick = async () => {
+            const amount = parseInt(currentInputAmount) || 0;
+            if (amount <= 0) return;
+            const now = new Date();
+            const data = { 
+                amount, dateStr: getBusinessDate(now), 
+                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+                pickupTime: rideStartTimestamp,
+                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+                userName: userName,
+                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+            };
+            const path = getPrivatePath('sales');
+            if (path) {
+                await db.collection(path).add(data);
+                sendRideToGAS(data);
+                refreshRanking(); // 売上が増えたのでランキングを再取得
+            }
+            document.getElementById('modal-payment').classList.add('hidden');
+            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
+        };
 
         // Utility UI Helpers
         function createMarkerHtml(name, status) {
@@ -1033,7 +1013,6 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
-
 
 
 
