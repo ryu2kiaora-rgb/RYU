@@ -540,9 +540,9 @@ document.addEventListener("visibilitychange", () => {
                 snap.docs.forEach(doc => {
                     const d = doc.data();
                     if (d.lat === undefined || d.lng === undefined) return;
-                    // 10分以上更新がない人はオフライン扱い
+                    // 60分以上更新がない人はオフライン扱い
                     const age = now - (d.updatedAt?.toDate() || now);
-                    if (age < 600000) {
+                    if (age < 3600000) {
                         count++;
                         if (user && doc.id !== user.uid && map) {
                             const icon = L.divIcon({ html: createMarkerHtml(d.name, d.status), className: '', iconSize:[0,0] });
