@@ -72,6 +72,13 @@
                     <div id="ranking-list" class="space-y-1 text-[10px]">
                         <p class="text-[9px] text-gray-400 italic">読込中...</p>
                     </div>
+
+                    <div class="absolute top-40 left-4 z-[500]">
+    <button id="btn-heatmap-toggle" class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50 text-[10px] font-bold text-gray-600 flex items-center justify-between">
+        <span><i class="fas fa-fire text-orange-500 mr-1"></i> 30分後予測</span>
+        <div id="heatmap-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
+    </button>
+</div>
                 </div>
             </div>
 
@@ -612,6 +619,21 @@ document.addEventListener("visibilitychange", () => {
                     endLat: ePos.lat, endLng: ePos.lng,
                     lat: sPos.lat, lng: sPos.lng
                 });
+
+                // ...既存の Firebaseの update処理が終わった直後に追記
+const updatedData = {
+    action: 'save', // 古いIDを消してから新しい内容で保存する
+    id: editingLogId,
+    userName: userName,
+    dayOfWeek: new Date().getDay(),
+    hour: parseInt(time.split(':')[0]),
+    minute: parseInt(time.split(':')[1]),
+    lat: sPos.lat,
+    lng: sPos.lng,
+    amount: amount,
+    rideTime: 0 // 修正時は計算が複雑になるため簡易的に0または既存値
+};
+fetch(GAS_URL, { method: 'POST', body: JSON.stringify(updatedData) });
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -621,6 +643,12 @@ document.addEventListener("visibilitychange", () => {
             const path = getPrivatePath('sales');
             if (path && editingLogId) {
                 await db.doc(`${path}/${editingLogId}`).delete();
+
+                // ...Firebaseの削除処理の直後
+fetch(GAS_URL, { 
+    method: 'POST', 
+    body: JSON.stringify({ action: 'delete', id: editingLogId }) 
+});
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -679,6 +707,10 @@ document.addEventListener("visibilitychange", () => {
             if (path) {
                 await db.collection(path).add(data);
                 refreshRanking(); // 売上が増えたのでランキングを再取得
+
+                // --- ここを追加 ---
+    sendToGAS({...data, id: docRef.id}); 
+    // ------------------
             }
             document.getElementById('modal-payment').classList.add('hidden');
             currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
@@ -811,6 +843,88 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
         };
         // -----------------------
 
+// --- 需要予測 & GAS連携セクション ---
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw7JZqk3SJeujDwZ1kSxfrQscv7dSyvi3YKwIOV5pbTmJBuv6xYpI5cZm2ACDgMZfL7Rw/exec"; 
+let heatmapLayer = null;
+let isHeatmapVisible = false;
+
+// 1. GASへデータを送信する関数
+async function sendToGAS(logData) {
+    const now = new Date();
+    const payload = {
+        action: 'save',
+        userName: userName,
+        dayOfWeek: now.getDay(), // 0:日, 1:月...
+        hour: now.getHours(),
+        minute: now.getMinutes(),
+        lat: logData.lat,
+        lng: logData.lng,
+        amount: logData.amount,
+        rideTime: Math.floor((logData.dropoffTime - logData.pickupTime) / 1000 / 60),
+        id: logData.id || Date.now()
+    };
+
+    fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+    }).catch(e => console.error("GAS送信失敗", e));
+}
+
+// 2. 予測データを取得してマップに表示する関数
+async function updateHeatmap() {
+    if (!isHeatmapVisible) return;
+
+    const now = new Date();
+    const future = new Date(now.getTime() + 30 * 60000); // 30分後
+
+    const res = await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'predict',
+            dayOfWeek: future.getDay(),
+            targetHour: future.getHours()
+        })
+    });
+    
+    const data = await res.json();
+    
+    // ヒートマップレイヤーのクリアと再描画
+    if (heatmapLayer) map.removeLayer(heatmapLayer);
+    
+    // 簡易的な円形マーカーで需要を表示（高単価予測も含む）
+    heatmapLayer = L.layerGroup();
+    data.forEach(row => {
+        const [,, , , , lat, lng, amount] = row;
+        const isHighValue = amount >= 5000; // 5000円以上を高単価とする
+        
+        L.circle([lat, lng], {
+            color: isHighValue ? '#ef4444' : '#f97316',
+            fillColor: isHighValue ? '#ef4444' : '#fb923c',
+            fillOpacity: 0.4,
+            radius: isHighValue ? 100 : 60,
+            weight: 1
+        }).addTo(heatmapLayer);
+    });
+    
+    heatmapLayer.addTo(map);
+}
+
+// 3. ボタンイベントの設定
+document.getElementById('btn-heatmap-toggle').onclick = () => {
+    isHeatmapVisible = !isHeatmapVisible;
+    const statusIdx = document.getElementById('heatmap-status');
+    if (isHeatmapVisible) {
+        statusIdx.classList.replace('bg-gray-300', 'bg-orange-500');
+        updateHeatmap();
+    } else {
+        statusIdx.classList.replace('bg-orange-500', 'bg-gray-300');
+        if (heatmapLayer) map.removeLayer(heatmapLayer);
+    }
+};
+
+// 10分ごとに自動更新
+setInterval(updateHeatmap, 600000);
+        
         window.onload = initApp;
 
         document.getElementById('btn-save-settings').onclick = async () => {
