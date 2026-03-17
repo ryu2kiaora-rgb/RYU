@@ -769,34 +769,50 @@ function getBusinessDate(date){
             }
         }
 
-        function showDailyDetail(ds) {
-            const logs = salesLogs.filter(l => l.dateStr === ds).sort((a,b) => b.timeStr.localeCompare(a.timeStr));
-            const container = document.getElementById('ride-logs'); if (!container) return;
-            document.getElementById('footer-daily-total').innerText = `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-            document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
-            document.getElementById('summary-date-label').innerText = `${ds.replace(/-/g,'/')} の概要`;
-            
-            container.innerHTML = logs.length ? logs.map(l => `
-                <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all" onclick="openEditLog('${l.id}')">
-                    <div class="flex flex-col gap-0.5">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.timeStr}</span>
-                            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
-                        </div>
-                        <div class="mt-1 flex items-center gap-1 text-slate-700">
-                             <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
-                             <p class="text-[11px] font-bold truncate max-w-[150px]">乗降地詳細あり</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="text-right">
-                            <p class="text-lg font-black text-slate-800 leading-none">¥${l.amount.toLocaleString()}</p>
-                            <p class="text-[8px] text-slate-300 font-bold uppercase mt-1 tracking-tighter">修正/削除 <i class="fas fa-pen ml-0.5"></i></p>
-                        </div>
-                    </div>
-                </div>
-            `).join('') : '<p class="text-slate-400 text-center py-10 text-xs italic">乗車記録がありません</p>';
+function showDailyDetail(ds) {
+    // 修正ポイント: timeStrの文字列比較ではなく、pickupTime（ミリ秒）で数値比較を行います
+    const logs = salesLogs.filter(l => l.dateStr === ds).sort((a, b) => {
+        // pickupTimeが存在する場合は数値で比較、ない場合は従来のtimeStrで比較（新しい順）
+        const timeA = a.pickupTime || 0;
+        const timeB = b.pickupTime || 0;
+        
+        if (timeA !== 0 && timeB !== 0) {
+            return timeB - timeA; 
         }
+        // 万が一古いデータなどでpickupTimeがない場合のみ文字列で比較
+        return b.timeStr.localeCompare(a.timeStr);
+    });
+
+    const container = document.getElementById('ride-logs'); 
+    if (!container) return;
+
+    // 概要欄の集計
+    document.getElementById('footer-daily-total').innerText = `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+    document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
+    document.getElementById('summary-date-label').innerText = `${ds.replace(/-/g,'/')} の概要`;
+    
+    // ログ一覧の生成
+    container.innerHTML = logs.length ? logs.map(l => `
+        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all" onclick="openEditLog('${l.id}')">
+            <div class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.timeStr}</span>
+                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
+                </div>
+                <div class="mt-1 flex items-center gap-1 text-slate-700">
+                     <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
+                     <p class="text-[11px] font-bold truncate max-w-[150px]">乗降地詳細あり</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-right">
+                    <p class="text-lg font-black text-slate-800 leading-none">¥${l.amount.toLocaleString()}</p>
+                    <p class="text-[8px] text-slate-300 font-bold uppercase mt-1 tracking-tighter">修正/削除 <i class="fas fa-pen ml-0.5"></i></p>
+                </div>
+            </div>
+        </div>
+    `).join('') : '<p class="text-slate-400 text-center py-10 text-xs italic">乗車記録がありません</p>';
+}
 
 function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
         
