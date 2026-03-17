@@ -829,65 +829,40 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
 document.getElementById('header-btn-end-shift').onclick = async () => {
     if (!confirm('シフトを終了しますか？')) return;
 
-    // --- 1. すべての「監視」を物理的に止める（権限エラー防止） ---
+    // 1. 状態フラグの更新
     isDriving = false;
 
-    // Firestoreのリアルタイム更新（Snapshot Listener）を止める
-    // もしコード内で unsubscribe = db.collection(...).onSnapshot(...) と定義しているなら
-    // ここで unsubscribe(); を実行する必要があります。
-    // 現状、syncInterval などで対応している場合は、それを確実に殺します。
+    // 2. 監視系の停止
     if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
     if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
-    // --- 2. マーカーとUIをリセット ---
+    // 3. Firestore削除処理（エラーをキャッチして処理を止めない）
+    if (user) {
+        try {
+            await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
+            console.log("ドライバーデータを削除しました");
+        } catch (e) {
+            console.error("Firestore削除エラー:", e);
+            // 権限エラーでもUIはリセットしたい場合、ここはあえて空にするかログ出力のみに留めます
+        }
+    }
+
+    // 4. マーカーと変数のクリーンアップ
     if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
     Object.keys(otherMarkers).forEach(id => {
-        if (otherMarkers[id]) map.removeLayer(otherMarkers[id]);
+        map.removeLayer(otherMarkers[id]);
         delete otherMarkers[id];
     });
 
-    // 強制的にオーバーレイを表示し、「確認中」を消してログインボタンを出す
-    const overlay = document.getElementById("shift-overlay");
-    if (overlay) {
-        overlay.classList.remove('hidden');
-        overlay.style.setProperty('display', 'flex', 'important');
-        
-        // 「確認中...」のスピナーを非表示にして、ログイン・開始ボタンを表示
-        const authLoadingUI = document.getElementById("auth-loading-ui");
-        if (authLoadingUI) {
-            authLoadingUI.style.display = "none"; 
-        }
-        
-        // ログインボタンがある要素（もしIDがあれば）を表示
-        const loginUI = document.getElementById("login-ui"); 
-        if (loginUI) loginUI.style.display = "block";
-    }
+    currentLat = null; currentLng = null; lastLat = null; lastLng = null;
 
-    // --- 3. Firestoreの自車データ削除と、完全なログアウト ---
-    if (user) {
-        const uid = user.uid;
-        try {
-            // 削除を待ってからサインアウト
-            await db.doc(`${getPublicPath('drivers')}/${uid}`).delete();
-            console.log("Firestore: データを削除完了");
-            
-            // ログアウト実行
-            await firebase.auth().signOut();
-            console.log("ログアウトしました");
-            
-            // これでも「確認中」が出る場合は、強制リロードが最も確実です
-            location.reload(); 
-        } catch (e) {
-            console.error("終了処理中のエラー:", e);
-            // エラーが出ても強制リロードしてアプリを初期化
-            location.reload();
-        }
-    }
+
+    // 5. オーバーレイ（開始画面）への復帰
+    document.getElementById("shift-overlay").style.display = "flex";
 };
     </script>
 </body>
 </html>
-
 
 
 
