@@ -829,39 +829,38 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
 document.getElementById('header-btn-end-shift').onclick = async () => {
     if (!confirm('シフトを終了しますか？')) return;
 
-    // --- A. まずUIとフラグを即座にリセットする（失敗させない処理） ---
+    // 1. 状態フラグと監視の停止
     isDriving = false;
-
-    // 監視系の停止
     if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
     if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
-    // 自車マーカーの削除
+    // 2. マーカーの消去
     if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-    
-    // 他車マーカーの全削除
     Object.keys(otherMarkers).forEach(id => {
         if (otherMarkers[id]) map.removeLayer(otherMarkers[id]);
         delete otherMarkers[id];
     });
 
-    currentLat = null; currentLng = null; lastLat = null; lastLng = null;
-
-    // 開始画面（オーバーレイ）を表示
+    // 3. UIを「開始画面」に戻す（ここが重要）
     const overlay = document.getElementById("shift-overlay");
     if (overlay) {
-        overlay.style.display = "flex";
-        // ローディングUIをリセット（もし非表示にしていた場合）
+        // Tailwindの hidden クラスを使っている場合を想定して削除
+        overlay.classList.remove('hidden');
+        // 強制的に表示状態にする
+        overlay.style.setProperty('display', 'flex', 'important');
+        // 他の要素より上に持ってくる（必要に応じて）
+        overlay.style.zIndex = "9999"; 
+        
+        // ローディングUIをリセット（「シフト開始」ボタンが見える状態にする）
         const authUI = document.getElementById("auth-loading-ui");
         if (authUI) authUI.style.display = "block";
     }
 
-    // --- B. Firestoreの削除は「後から」バックグラウンドで行う ---
+    // 4. Firestoreの削除（待機せずに実行）
     if (user) {
-        // ここに await を置かない、もしくは try-catch で完全に囲む
         db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete()
             .then(() => console.log("Firestore: データを削除完了"))
-            .catch(e => console.warn("Firestore: 削除に失敗しましたがUIは戻しました", e));
+            .catch(e => console.error("Firestore削除エラー:", e));
     }
 };
     </script>
