@@ -678,43 +678,58 @@ fetch(GAS_URL, {
             }, 1000);
         };
 
-        document.getElementById('btn-ride-off').onclick = () => {
-            isDriving = false; clearInterval(timerInterval);
-            endPos = { lat: currentLat, lng: currentLng };
-            document.getElementById('active-timer-container').classList.add('invisible');
-            document.getElementById('btn-ride-on').classList.remove('hidden');
-            document.getElementById('btn-ride-off').classList.add('hidden');
-            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
-            syncStatusToFirestore(true); // 状態変化時は即送信
-            document.getElementById('modal-payment').classList.remove('hidden');
-        };
+document.getElementById('btn-pay-submit').onclick = async () => {
+    const amount = parseInt(currentInputAmount) || 0;
+    if (amount <= 0) {
+        alert("金額を入力してください");
+        return;
+    }
 
-        document.getElementById('btn-pay-submit').onclick = async () => {
-            const amount = parseInt(currentInputAmount) || 0;
-            if (amount <= 0) return;
-            const now = new Date();
-            const data = { 
-                amount, dateStr: getBusinessDate(now), 
-                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-                pickupTime: rideStartTimestamp,
-                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-                userName: userName,
-                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
-                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
-                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
-            };
-            const path = getPrivatePath('sales');
-            if (path) {
-                await db.collection(path).add(data);
-                refreshRanking(); // 売上が増えたのでランキングを再取得
+    const now = new Date();
+    const data = { 
+        amount, 
+        dateStr: getBusinessDate(now), 
+        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+        pickupTime: rideStartTimestamp,
+        dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+        userName: userName,
+        lat: startPos?.lat || currentLat, 
+        lng: startPos?.lng || currentLat,
+        startLat: startPos?.lat || currentLat, 
+        startLng: startPos?.lng || currentLat,
+        endLat: endPos?.lat || currentLat, 
+        endLng: endPos?.lng || currentLat
+    };
 
-                // --- ここを追加 ---
-    sendToGAS({...data, id: docRef.id}); 
-    // ------------------
-            }
-            document.getElementById('modal-payment').classList.add('hidden');
-            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
-        };
+    try {
+        const path = getPrivatePath('sales');
+        if (path) {
+            // 1. Firebaseに保存
+            const docRef = await db.collection(path).add(data);
+            
+            // 2. GASに送信（非同期で実行し、止まらないようにする）
+            sendToGAS({ ...data, id: docRef.id }).catch(e => console.error("GAS送信失敗:", e));
+            
+            // 3. ランキング更新
+            refreshRanking();
+        }
+
+        // --- ここからが画面を閉じる重要な処理 ---
+        
+        // 4. モーダルを非表示にする
+        document.getElementById('modal-payment').classList.add('hidden');
+        
+        // 5. 入力値をリセット
+        currentInputAmount = ""; 
+        document.getElementById('input-display').innerText = "¥ 0";
+
+        console.log("保存とモーダル閉鎖が完了しました");
+
+    } catch (error) {
+        console.error("保存エラー:", error);
+        alert("保存中にエラーが発生しました。");
+    }
+};
 
         // Utility UI Helpers
         function createMarkerHtml(name, status) {
