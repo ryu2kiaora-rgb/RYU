@@ -829,47 +829,59 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
 document.getElementById('header-btn-end-shift').onclick = async () => {
     if (!confirm('シフトを終了しますか？')) return;
 
-    // 1. 状態フラグと監視の停止
+    // --- 1. すべての「監視」を物理的に止める（権限エラー防止） ---
     isDriving = false;
+
+    // Firestoreのリアルタイム更新（Snapshot Listener）を止める
+    // もしコード内で unsubscribe = db.collection(...).onSnapshot(...) と定義しているなら
+    // ここで unsubscribe(); を実行する必要があります。
+    // 現状、syncInterval などで対応している場合は、それを確実に殺します。
     if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
     if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
-    // 2. マーカーの消去
+    // --- 2. マーカーとUIをリセット ---
     if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
     Object.keys(otherMarkers).forEach(id => {
         if (otherMarkers[id]) map.removeLayer(otherMarkers[id]);
         delete otherMarkers[id];
     });
 
-    // 3. UIを「開始画面」に戻す（ここが重要）
+    // 強制的にオーバーレイを表示し、「確認中」を消してログインボタンを出す
     const overlay = document.getElementById("shift-overlay");
     if (overlay) {
-        // Tailwindの hidden クラスを使っている場合を想定して削除
         overlay.classList.remove('hidden');
-        // 強制的に表示状態にする
         overlay.style.setProperty('display', 'flex', 'important');
-        // 他の要素より上に持ってくる（必要に応じて）
-        overlay.style.zIndex = "9999"; 
         
-        // ローディングUIをリセット（「シフト開始」ボタンが見える状態にする）
-        const authUI = document.getElementById("auth-loading-ui");
-        if (authUI) authUI.style.display = "block";
+        // 「確認中...」のスピナーを非表示にして、ログイン・開始ボタンを表示
+        const authLoadingUI = document.getElementById("auth-loading-ui");
+        if (authLoadingUI) {
+            authLoadingUI.style.display = "none"; 
+        }
+        
+        // ログインボタンがある要素（もしIDがあれば）を表示
+        const loginUI = document.getElementById("login-ui"); 
+        if (loginUI) loginUI.style.display = "block";
     }
 
-// 4. Firestore削除の後にログアウトを追加
+    // --- 3. Firestoreの自車データ削除と、完全なログアウト ---
     if (user) {
-        db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete()
-            .then(() => {
-                console.log("Firestore: データを削除完了");
-                // 完全にログアウトさせることで、リロードなしでもログイン画面に戻る
-                return firebase.auth().signOut();
-            })
-            .then(() => {
-                console.log("ログアウトしました");
-                // ログアウト後に画面をリロードさせて初期状態にする場合
-                // location.reload(); 
-            })
-            .catch(e => console.warn(e));
+        const uid = user.uid;
+        try {
+            // 削除を待ってからサインアウト
+            await db.doc(`${getPublicPath('drivers')}/${uid}`).delete();
+            console.log("Firestore: データを削除完了");
+            
+            // ログアウト実行
+            await firebase.auth().signOut();
+            console.log("ログアウトしました");
+            
+            // これでも「確認中」が出る場合は、強制リロードが最も確実です
+            location.reload(); 
+        } catch (e) {
+            console.error("終了処理中のエラー:", e);
+            // エラーが出ても強制リロードしてアプリを初期化
+            location.reload();
+        }
     }
 };
     </script>
