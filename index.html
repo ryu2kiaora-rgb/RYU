@@ -685,49 +685,62 @@ document.getElementById('btn-pay-submit').onclick = async () => {
         return;
     }
 
-    const now = new Date();
-    const data = { 
-        amount, 
-        dateStr: getBusinessDate(now), 
-        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-        pickupTime: rideStartTimestamp,
-        dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-        userName: userName,
-        lat: startPos?.lat || currentLat, 
-        lng: startPos?.lng || currentLat,
-        startLat: startPos?.lat || currentLat, 
-        startLng: startPos?.lng || currentLat,
-        endLat: endPos?.lat || currentLat, 
-        endLng: endPos?.lng || currentLat
-    };
+    // ローディング表示（連打防止）
+    const btn = document.getElementById('btn-pay-submit');
+    const originalText = btn.innerText;
+    btn.innerText = "保存中...";
+    btn.disabled = true;
 
     try {
+        const now = new Date();
+        const data = { 
+            amount, 
+            dateStr: getBusinessDate(now), 
+            timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+            pickupTime: rideStartTimestamp,
+            dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+            userName: userName,
+            lat: startPos?.lat || currentLat, 
+            lng: startPos?.lng || currentLat,
+            startLat: startPos?.lat || currentLat, 
+            startLng: startPos?.lng || currentLat,
+            endLat: endPos?.lat || currentLat, 
+            endLng: endPos?.lng || currentLat
+        };
+
         const path = getPrivatePath('sales');
         if (path) {
-            // 1. Firebaseに保存
+            // 1. まずFirebaseに保存
             const docRef = await db.collection(path).add(data);
             
-            // 2. GASに送信（非同期で実行し、止まらないようにする）
-            sendToGAS({ ...data, id: docRef.id }).catch(e => console.error("GAS送信失敗:", e));
+            // 2. GAS送信（重要：失敗しても無視して次に進む設定）
+            if (typeof sendToGAS === 'function') {
+                sendToGAS({ ...data, id: docRef.id }).catch(e => {
+                    console.error("GAS送信には失敗しましたが、記録は継続します:", e);
+                });
+            }
             
-            // 3. ランキング更新
             refreshRanking();
         }
 
-        // --- ここからが画面を閉じる重要な処理 ---
-        
-        // 4. モーダルを非表示にする
+        // 3. 画面を閉じる処理（ここが確実に実行されるようにする）
         document.getElementById('modal-payment').classList.add('hidden');
-        
-        // 5. 入力値をリセット
         currentInputAmount = ""; 
         document.getElementById('input-display').innerText = "¥ 0";
+        
+        // 4. マップの状態をリセット（必要なら）
+        if (ridePolyline) { map.removeLayer(ridePolyline); ridePolyline = null; }
+        startPos = null; endPos = null;
 
-        console.log("保存とモーダル閉鎖が完了しました");
+        alert("記録しました");
 
     } catch (error) {
         console.error("保存エラー:", error);
-        alert("保存中にエラーが発生しました。");
+        alert("保存に失敗しました: " + error.message);
+    } finally {
+        // ボタンを元に戻す
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 };
 
