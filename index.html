@@ -856,11 +856,20 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
         if (authUI) authUI.style.display = "block";
     }
 
-    // 4. Firestoreの削除（待機せずに実行）
+// 4. Firestore削除の後にログアウトを追加
     if (user) {
         db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete()
-            .then(() => console.log("Firestore: データを削除完了"))
-            .catch(e => console.error("Firestore削除エラー:", e));
+            .then(() => {
+                console.log("Firestore: データを削除完了");
+                // 完全にログアウトさせることで、リロードなしでもログイン画面に戻る
+                return firebase.auth().signOut();
+            })
+            .then(() => {
+                console.log("ログアウトしました");
+                // ログアウト後に画面をリロードさせて初期状態にする場合
+                // location.reload(); 
+            })
+            .catch(e => console.warn(e));
     }
 };
     </script>
