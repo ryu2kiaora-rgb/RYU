@@ -72,13 +72,6 @@
                     <div id="ranking-list" class="space-y-1 text-[10px]">
                         <p class="text-[9px] text-gray-400 italic">読込中...</p>
                     </div>
-
-                    <div class="absolute top-40 left-4 z-[500]">
-    <button id="btn-heatmap-toggle" class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50 text-[10px] font-bold text-gray-600 flex items-center justify-between">
-        <span><i class="fas fa-fire text-orange-500 mr-1"></i> 30分後予測</span>
-        <div id="heatmap-status" class="w-3 h-3 rounded-full bg-gray-300"></div>
-    </button>
-</div>
                 </div>
             </div>
 
@@ -619,21 +612,6 @@ document.addEventListener("visibilitychange", () => {
                     endLat: ePos.lat, endLng: ePos.lng,
                     lat: sPos.lat, lng: sPos.lng
                 });
-
-                // ...既存の Firebaseの update処理が終わった直後に追記
-const updatedData = {
-    action: 'save', // 古いIDを消してから新しい内容で保存する
-    id: editingLogId,
-    userName: userName,
-    dayOfWeek: new Date().getDay(),
-    hour: parseInt(time.split(':')[0]),
-    minute: parseInt(time.split(':')[1]),
-    lat: sPos.lat,
-    lng: sPos.lng,
-    amount: amount,
-    rideTime: 0 // 修正時は計算が複雑になるため簡易的に0または既存値
-};
-fetch(GAS_URL, { method: 'POST', body: JSON.stringify(updatedData) });
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -643,12 +621,6 @@ fetch(GAS_URL, { method: 'POST', body: JSON.stringify(updatedData) });
             const path = getPrivatePath('sales');
             if (path && editingLogId) {
                 await db.doc(`${path}/${editingLogId}`).delete();
-
-                // ...Firebaseの削除処理の直後
-fetch(GAS_URL, { 
-    method: 'POST', 
-    body: JSON.stringify({ action: 'delete', id: editingLogId }) 
-});
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -678,71 +650,39 @@ fetch(GAS_URL, {
             }, 1000);
         };
 
-document.getElementById('btn-pay-submit').onclick = async () => {
-    const amount = parseInt(currentInputAmount) || 0;
-    if (amount <= 0) {
-        alert("金額を入力してください");
-        return;
-    }
-
-    // ローディング表示（連打防止）
-    const btn = document.getElementById('btn-pay-submit');
-    const originalText = btn.innerText;
-    btn.innerText = "保存中...";
-    btn.disabled = true;
-
-    try {
-        const now = new Date();
-        const data = { 
-            amount, 
-            dateStr: getBusinessDate(now), 
-            timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-            pickupTime: rideStartTimestamp,
-            dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-            userName: userName,
-            lat: startPos?.lat || currentLat, 
-            lng: startPos?.lng || currentLat,
-            startLat: startPos?.lat || currentLat, 
-            startLng: startPos?.lng || currentLat,
-            endLat: endPos?.lat || currentLat, 
-            endLng: endPos?.lng || currentLat
+        document.getElementById('btn-ride-off').onclick = () => {
+            isDriving = false; clearInterval(timerInterval);
+            endPos = { lat: currentLat, lng: currentLng };
+            document.getElementById('active-timer-container').classList.add('invisible');
+            document.getElementById('btn-ride-on').classList.remove('hidden');
+            document.getElementById('btn-ride-off').classList.add('hidden');
+            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
+            syncStatusToFirestore(true); // 状態変化時は即送信
+            document.getElementById('modal-payment').classList.remove('hidden');
         };
 
-        const path = getPrivatePath('sales');
-        if (path) {
-            // 1. まずFirebaseに保存
-            const docRef = await db.collection(path).add(data);
-            
-            // 2. GAS送信（重要：失敗しても無視して次に進む設定）
-            if (typeof sendToGAS === 'function') {
-                sendToGAS({ ...data, id: docRef.id }).catch(e => {
-                    console.error("GAS送信には失敗しましたが、記録は継続します:", e);
-                });
+        document.getElementById('btn-pay-submit').onclick = async () => {
+            const amount = parseInt(currentInputAmount) || 0;
+            if (amount <= 0) return;
+            const now = new Date();
+            const data = { 
+                amount, dateStr: getBusinessDate(now), 
+                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+                pickupTime: rideStartTimestamp,
+                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+                userName: userName,
+                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+            };
+            const path = getPrivatePath('sales');
+            if (path) {
+                await db.collection(path).add(data);
+                refreshRanking(); // 売上が増えたのでランキングを再取得
             }
-            
-            refreshRanking();
-        }
-
-        // 3. 画面を閉じる処理（ここが確実に実行されるようにする）
-        document.getElementById('modal-payment').classList.add('hidden');
-        currentInputAmount = ""; 
-        document.getElementById('input-display').innerText = "¥ 0";
-        
-        // 4. マップの状態をリセット（必要なら）
-        if (ridePolyline) { map.removeLayer(ridePolyline); ridePolyline = null; }
-        startPos = null; endPos = null;
-
-        alert("記録しました");
-
-    } catch (error) {
-        console.error("保存エラー:", error);
-        alert("保存に失敗しました: " + error.message);
-    } finally {
-        // ボタンを元に戻す
-        btn.innerText = originalText;
-        btn.disabled = false;
-    }
-};
+            document.getElementById('modal-payment').classList.add('hidden');
+            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
+        };
 
         // Utility UI Helpers
         function createMarkerHtml(name, status) {
@@ -871,88 +811,6 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
         };
         // -----------------------
 
-// --- 需要予測 & GAS連携セクション ---
-const GAS_URL = "https://script.google.com/macros/s/AKfycbw7JZqk3SJeujDwZ1kSxfrQscv7dSyvi3YKwIOV5pbTmJBuv6xYpI5cZm2ACDgMZfL7Rw/exec"; 
-let heatmapLayer = null;
-let isHeatmapVisible = false;
-
-// 1. GASへデータを送信する関数
-async function sendToGAS(logData) {
-    const now = new Date();
-    const payload = {
-        action: 'save',
-        userName: userName,
-        dayOfWeek: now.getDay(), // 0:日, 1:月...
-        hour: now.getHours(),
-        minute: now.getMinutes(),
-        lat: logData.lat,
-        lng: logData.lng,
-        amount: logData.amount,
-        rideTime: Math.floor((logData.dropoffTime - logData.pickupTime) / 1000 / 60),
-        id: logData.id || Date.now()
-    };
-
-    fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-    }).catch(e => console.error("GAS送信失敗", e));
-}
-
-// 2. 予測データを取得してマップに表示する関数
-async function updateHeatmap() {
-    if (!isHeatmapVisible) return;
-
-    const now = new Date();
-    const future = new Date(now.getTime() + 30 * 60000); // 30分後
-
-    const res = await fetch(GAS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-            action: 'predict',
-            dayOfWeek: future.getDay(),
-            targetHour: future.getHours()
-        })
-    });
-    
-    const data = await res.json();
-    
-    // ヒートマップレイヤーのクリアと再描画
-    if (heatmapLayer) map.removeLayer(heatmapLayer);
-    
-    // 簡易的な円形マーカーで需要を表示（高単価予測も含む）
-    heatmapLayer = L.layerGroup();
-    data.forEach(row => {
-        const [,, , , , lat, lng, amount] = row;
-        const isHighValue = amount >= 5000; // 5000円以上を高単価とする
-        
-        L.circle([lat, lng], {
-            color: isHighValue ? '#ef4444' : '#f97316',
-            fillColor: isHighValue ? '#ef4444' : '#fb923c',
-            fillOpacity: 0.4,
-            radius: isHighValue ? 100 : 60,
-            weight: 1
-        }).addTo(heatmapLayer);
-    });
-    
-    heatmapLayer.addTo(map);
-}
-
-// 3. ボタンイベントの設定
-document.getElementById('btn-heatmap-toggle').onclick = () => {
-    isHeatmapVisible = !isHeatmapVisible;
-    const statusIdx = document.getElementById('heatmap-status');
-    if (isHeatmapVisible) {
-        statusIdx.classList.replace('bg-gray-300', 'bg-orange-500');
-        updateHeatmap();
-    } else {
-        statusIdx.classList.replace('bg-orange-500', 'bg-gray-300');
-        if (heatmapLayer) map.removeLayer(heatmapLayer);
-    }
-};
-
-// 10分ごとに自動更新
-setInterval(updateHeatmap, 600000);
-        
         window.onload = initApp;
 
         document.getElementById('btn-save-settings').onclick = async () => {
@@ -1005,7 +863,6 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
-
 
 
 
