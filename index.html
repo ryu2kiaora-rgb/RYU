@@ -659,6 +659,20 @@ document.addEventListener("visibilitychange", () => {
                     endLat: ePos.lat, endLng: ePos.lng,
                     lat: sPos.lat, lng: sPos.lng
                 });
+                // 🔥 GASにも更新を送る
+await fetch(GAS_URL, {
+  method: "POST",
+  body: JSON.stringify({
+    mode: "update",
+    logId: editingLogId,
+    pickupLat: sPos.lat,
+    pickupLng: sPos.lng,
+    dropLat: ePos.lat,
+    dropLng: ePos.lng,
+    pickupTime: time,
+    amount: amount
+  })
+});
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
