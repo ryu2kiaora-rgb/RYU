@@ -355,7 +355,7 @@ dropTime:Date.now(),
 
 amount:data.amount,
 
-duration:(Date.now()-data.pickupTime)/1000,
+duration: Math.round((Date.now() - data.pickupTime) / 1000 / 60 * 100) / 100,
 
 distance:calcDistance(
 data.startLat,
