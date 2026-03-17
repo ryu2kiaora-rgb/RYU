@@ -829,36 +829,40 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
 document.getElementById('header-btn-end-shift').onclick = async () => {
     if (!confirm('シフトを終了しますか？')) return;
 
-    // 1. 状態フラグの更新
+    // --- A. まずUIとフラグを即座にリセットする（失敗させない処理） ---
     isDriving = false;
 
-    // 2. 監視系の停止
+    // 監視系の停止
     if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
     if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
-    // 3. Firestore削除処理（エラーをキャッチして処理を止めない）
-    if (user) {
-        try {
-            await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
-            console.log("ドライバーデータを削除しました");
-        } catch (e) {
-            console.error("Firestore削除エラー:", e);
-            // 権限エラーでもUIはリセットしたい場合、ここはあえて空にするかログ出力のみに留めます
-        }
-    }
-
-    // 4. マーカーと変数のクリーンアップ
+    // 自車マーカーの削除
     if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    
+    // 他車マーカーの全削除
     Object.keys(otherMarkers).forEach(id => {
-        map.removeLayer(otherMarkers[id]);
+        if (otherMarkers[id]) map.removeLayer(otherMarkers[id]);
         delete otherMarkers[id];
     });
 
     currentLat = null; currentLng = null; lastLat = null; lastLng = null;
 
+    // 開始画面（オーバーレイ）を表示
+    const overlay = document.getElementById("shift-overlay");
+    if (overlay) {
+        overlay.style.display = "flex";
+        // ローディングUIをリセット（もし非表示にしていた場合）
+        const authUI = document.getElementById("auth-loading-ui");
+        if (authUI) authUI.style.display = "block";
+    }
 
-    // 5. オーバーレイ（開始画面）への復帰
-    document.getElementById("shift-overlay").style.display = "flex";
+    // --- B. Firestoreの削除は「後から」バックグラウンドで行う ---
+    if (user) {
+        // ここに await を置かない、もしくは try-catch で完全に囲む
+        db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete()
+            .then(() => console.log("Firestore: データを削除完了"))
+            .catch(e => console.warn("Firestore: 削除に失敗しましたがUIは戻しました", e));
+    }
 };
     </script>
 </body>
