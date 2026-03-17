@@ -86,6 +86,33 @@
     <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
         <i class="fas fa-location-crosshairs text-lg"></i>
     </button>
+                const heatBtn=document.createElement("button")
+
+heatBtn.innerText="需要"
+
+heatBtn.className="bg-white px-3 py-2 rounded shadow"
+
+heatBtn.style.position="absolute"
+heatBtn.style.bottom="120px"
+heatBtn.style.right="20px"
+
+document.body.appendChild(heatBtn)
+
+heatBtn.onclick=()=>{
+
+heatEnabled=!heatEnabled
+
+if(heatEnabled){
+
+loadPrediction()
+
+}else{
+
+if(heatLayer) map.removeLayer(heatLayer)
+
+}
+
+}
 </div>
 
 
@@ -277,7 +304,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
     <script>
         // Configuration
@@ -290,6 +319,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwxo0JThVaY4k3TK5hTthXKfrXd5VTbDU7_e4skaCHkvK9rnFQ18b3P2omiYbrKwNRGBA/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -323,6 +353,49 @@ function calcDistance(lat1, lon1, lat2, lon2) {
 
     return R * c;
 }
+        function sendToGAS(data,logId){
+
+fetch(GAS_URL,{
+method:"POST",
+body:JSON.stringify({
+
+mode:"add",
+
+logId:logId,
+driverId:user.uid,
+userName:userName,
+
+date:data.dateStr,
+weekday:new Date().getDay(),
+
+hour:new Date().getHours(),
+minute:new Date().getMinutes(),
+
+pickupLat:data.startLat,
+pickupLng:data.startLng,
+pickupTime:data.pickupTime,
+
+dropLat:data.endLat,
+dropLng:data.endLng,
+dropTime:Date.now(),
+
+amount:data.amount,
+
+duration:(Date.now()-data.pickupTime)/1000,
+
+distance:calcDistance(
+data.startLat,
+data.startLng,
+data.endLat,
+data.endLng
+)
+
+})
+
+})
+
+}
+        
         // Path Helpers
         const getPublicPath = (col) => `artifacts/${appId}/public/data/${col}`;
         const getPrivatePath = (col) => user ? `artifacts/${appId}/users/${user.uid}/${col}` : null;
@@ -621,6 +694,14 @@ document.addEventListener("visibilitychange", () => {
             const path = getPrivatePath('sales');
             if (path && editingLogId) {
                 await db.doc(`${path}/${editingLogId}`).delete();
+
+                fetch(GAS_URL,{
+method:"POST",
+body:JSON.stringify({
+mode:"delete",
+logId:editingLogId
+})
+})
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -677,7 +758,8 @@ document.addEventListener("visibilitychange", () => {
             };
             const path = getPrivatePath('sales');
             if (path) {
-                await db.collection(path).add(data);
+                const docRef = await db.collection(path).add(data);
+                sendToGAS(data,docRef.id)
                 refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
@@ -685,6 +767,38 @@ document.addEventListener("visibilitychange", () => {
         };
 
         // Utility UI Helpers
+
+
+        let heatLayer=null
+let heatEnabled=false
+
+async function loadPrediction(){
+
+const res=await fetch(GAS_URL+"?mode=predict")
+
+const data=await res.json()
+
+drawHeatmap(data)
+
+}
+
+function drawHeatmap(points){
+
+const heatData=points.map(p=>[
+p.lat,
+p.lng,
+Math.min(p.amount/2000,1)
+])
+
+if(heatLayer) map.removeLayer(heatLayer)
+
+heatLayer=L.heatLayer(heatData,{
+radius:25,
+blur:20
+}).addTo(map)
+
+}
+        
         function createMarkerHtml(name, status) {
             const color = status === 'occupied' ? '#ef4444' : '#3b82f6';
             return `<div class="driver-marker-container">
@@ -811,6 +925,16 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
         };
         // -----------------------
 
+
+        setInterval(()=>{
+
+if(heatEnabled){
+
+loadPrediction()
+
+}
+
+},300000)
         window.onload = initApp;
 
         document.getElementById('btn-save-settings').onclick = async () => {
