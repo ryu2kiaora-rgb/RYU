@@ -86,33 +86,7 @@
     <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
         <i class="fas fa-location-crosshairs text-lg"></i>
     </button>
-                const heatBtn=document.createElement("button")
-
-heatBtn.innerText="需要"
-
-heatBtn.className="bg-white px-3 py-2 rounded shadow"
-
-heatBtn.style.position="absolute"
-heatBtn.style.bottom="120px"
-heatBtn.style.right="20px"
-
-document.body.appendChild(heatBtn)
-
-heatBtn.onclick=()=>{
-
-heatEnabled=!heatEnabled
-
-if(heatEnabled){
-
-loadPrediction()
-
-}else{
-
-if(heatLayer) map.removeLayer(heatLayer)
-
-}
-
-}
+                
 </div>
 
 
@@ -924,6 +898,39 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
             }
         };
         // -----------------------
+
+        // ===== ここに追加 =====
+
+const heatBtn=document.createElement("button")
+
+heatBtn.innerText="需要"
+
+heatBtn.className="bg-white px-3 py-2 rounded shadow text-sm font-bold"
+
+heatBtn.style.position="absolute"
+heatBtn.style.bottom="120px"
+heatBtn.style.right="20px"
+heatBtn.style.zIndex="1200"
+
+document.body.appendChild(heatBtn)
+
+heatBtn.onclick=()=>{
+
+heatEnabled=!heatEnabled
+
+if(heatEnabled){
+
+loadPrediction()
+
+}else{
+
+if(heatLayer) map.removeLayer(heatLayer)
+
+}
+
+}
+
+// ===== ここまで追加 =====
 
 
         setInterval(()=>{
