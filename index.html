@@ -6,8 +6,6 @@
     <title>RideShare Connect Pro - Saving Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
         #map { height: calc(100vh - 128px); width: 100%; }
@@ -88,12 +86,6 @@
     <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
         <i class="fas fa-location-crosshairs text-lg"></i>
     </button>
-                <button id="btn-heat-toggle"
-class="w-10 h-10 bg-white rounded-xl shadow-lg">
-🔥
-</button>
-
-                                
 </div>
 
 
@@ -285,6 +277,7 @@ class="w-10 h-10 bg-white rounded-xl shadow-lg">
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
         // Configuration
@@ -301,13 +294,6 @@ class="w-10 h-10 bg-white rounded-xl shadow-lg">
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-
-        // ===== GAS設定 =====
-const GAS_API = "https://script.google.com/macros/s/AKfycbxetn4PFfHlWTdTilRdW9lwdMSzGD2arruNqZIM5T9f9CH3o6aJVB-c7bhR5LmcuRHE/exec";
-
-// ===== ヒートマップ =====
-let heatLayer = null;
-let heatEnabled = false;
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
@@ -586,9 +572,6 @@ document.addEventListener("visibilitychange", () => {
             const log = salesLogs.find(l => l.id === id);
             if (!log) return;
             editingLogId = id;
-                // ★追加（GAS用ログ保持）
-    editingRideData = log;
-            
             document.getElementById('edit-time').value = log.timeStr;
             document.getElementById('edit-amount').value = log.amount;
             document.getElementById('modal-edit-log').classList.remove('hidden');
@@ -613,82 +596,34 @@ document.addEventListener("visibilitychange", () => {
         }
 
         // Event Handlers
-document.getElementById('btn-edit-save').onclick = async () => {
+        document.getElementById('btn-edit-save').onclick = async () => {
+            const time = document.getElementById('edit-time').value;
+            const amount = parseInt(document.getElementById('edit-amount').value);
+            if (!time || isNaN(amount)) return;
 
-    const time = document.getElementById('edit-time').value;
-    const amount = parseInt(document.getElementById('edit-amount').value);
+            const sPos = editStartMarker.getLatLng();
+            const ePos = editEndMarker.getLatLng();
 
-    if (!time || isNaN(amount)) return;
-
-    const sPos = editStartMarker.getLatLng();
-    const ePos = editEndMarker.getLatLng();
-
-    const path = getPrivatePath('sales');
-
-    if (path && editingLogId) {
-
-        // ===== Firestore更新 =====
-        await db.doc(`${path}/${editingLogId}`).update({ 
-            timeStr: time,
-            amount,
-            startLat: sPos.lat,
-            startLng: sPos.lng,
-            endLat: ePos.lat,
-            endLng: ePos.lng,
-            lat: sPos.lat,
-            lng: sPos.lng
-        });
-
-        // ===== GAS更新 =====
-
-        // 古いログ削除
-        sendRideToGAS(editingRideData,"delete");
-
-        // 新しいログ作成
-        const newData = {
-            ...editingRideData,
-            timeStr: time,
-            amount: amount,
-            startLat: sPos.lat,
-            startLng: sPos.lng,
-            endLat: ePos.lat,
-            endLng: ePos.lng
+            const path = getPrivatePath('sales');
+            if (path && editingLogId) {
+                await db.doc(`${path}/${editingLogId}`).update({ 
+                    timeStr: time, amount,
+                    startLat: sPos.lat, startLng: sPos.lng,
+                    endLat: ePos.lat, endLng: ePos.lng,
+                    lat: sPos.lat, lng: sPos.lng
+                });
+            }
+            document.getElementById('modal-edit-log').classList.add('hidden');
         };
 
-        // 新ログ追加
-        sendRideToGAS(newData,"add");
-
-    }
-
-    document.getElementById('modal-edit-log').classList.add('hidden');
-
-};
-
-
         document.getElementById('btn-edit-delete').onclick = async () => {
-
-    if (!confirm('この乗車記録を削除しますか？')) return;
-
-    const path = getPrivatePath('sales');
-
-    if (path && editingLogId) {
-
-        // ===== Firestore削除 =====
-        await db.doc(`${path}/${editingLogId}`).delete();
-
-        // ===== GAS削除 =====
-        if(editingRideData){
-            sendRideToGAS(editingRideData,"delete");
-            sendRideToGAS(newData,"add");
-        }
-
-    }
-
-    document.getElementById('modal-edit-log').classList.add('hidden');
-
-};
-
-
+            if (!confirm('この乗車記録を削除しますか？')) return;
+            const path = getPrivatePath('sales');
+            if (path && editingLogId) {
+                await db.doc(`${path}/${editingLogId}`).delete();
+            }
+            document.getElementById('modal-edit-log').classList.add('hidden');
+        };
 
         document.getElementById('btn-edit-cancel').onclick = () => {
             document.getElementById('modal-edit-log').classList.add('hidden');
@@ -743,7 +678,6 @@ document.getElementById('btn-edit-save').onclick = async () => {
             const path = getPrivatePath('sales');
             if (path) {
                 await db.collection(path).add(data);
-                sendRideToGAS(data);
                 refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
@@ -787,99 +721,6 @@ function getBusinessDate(date){
             document.getElementById('setting-user-name').value = userName || "";
             document.getElementById('setting-closing-day').value = closingDay;
         }
-
-        // ===== GASへ乗車ログ送信 =====
-async function sendRideToGAS(data,type="add"){
-
-try{
-
-const payload = {
-
-type:type,
-
-logId:data.id || editingLogId || "",
-
-driverId:user?.uid || "",
-driverName:userName || "",
-
-pickupLat:data.startLat,
-pickupLng:data.startLng,
-
-pickupTime:data.pickupTime,
-
-dropLat:data.endLat,
-dropLng:data.endLng,
-
-dropTime:data.dropTime || Date.now(),
-
-fare:data.amount,
-
-weekday:new Date().getDay(),
-hour:new Date().getHours(),
-minute:new Date().getMinutes()
-
-};
-
-fetch(GAS_API,{
-method:"POST",
-body:JSON.stringify(payload)
-});
-
-}catch(e){
-
-console.log("GAS送信エラー",e);
-
-}
-
-}
-        async function toggleHeatMap(){
-
-heatEnabled = !heatEnabled;
-
-if(!heatEnabled){
-
-if(heatLayer){
-map.removeLayer(heatLayer);
-}
-
-return;
-
-}
-
-const res = await fetch(GAS_API+"?mode=heat");
-const data = await res.json();
-
-drawHeatMap(data);
-
-}
-        function drawHeatMap(data){
-
-if(heatLayer){
-map.removeLayer(heatLayer);
-}
-
-const points = data.map(d=>[
-d.lat,
-d.lng,
-0.6
-]);
-
-heatLayer = L.heatLayer(points,{
-radius:25,
-blur:18
-}).addTo(map);
-
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-
-const btn = document.getElementById("btn-heat-toggle");
-
-if(btn){
-btn.onclick = toggleHeatMap;
-}
-
-});
 
         document.getElementById('btn-submit-registration').onclick = () => {
             const val = document.getElementById('initial-user-name').value.trim();
@@ -959,7 +800,16 @@ btn.onclick = toggleHeatMap;
 
 function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
         
-
+        // --- ここに追加しました ---
+        document.getElementById('btn-recenter').onclick = () => {
+            if (userMarker) {
+                const latlng = userMarker.getLatLng();
+                map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
+            } else {
+                alert("現在地を取得中です...");
+            }
+        };
+        // -----------------------
 
         window.onload = initApp;
 
@@ -1013,6 +863,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
+
 
 
 
