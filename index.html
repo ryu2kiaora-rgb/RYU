@@ -534,28 +534,47 @@ document.addEventListener("visibilitychange", () => {
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
         function listenToDrivers() {
-            db.collection(getPublicPath('drivers')).onSnapshot(snap => {
-                const now = new Date();
-                let count = 0;
-                snap.docs.forEach(doc => {
-                    const d = doc.data();
-                    if (d.lat === undefined || d.lng === undefined) return;
-                    // 60分以上更新がない人はオフライン扱い
-                    const age = now - (d.updatedAt?.toDate() || now);
-                    if (age < 3600000) {
-                        count++;
-                        if (user && doc.id !== user.uid && map) {
-                            const icon = L.divIcon({ html: createMarkerHtml(d.name, d.status), className: '', iconSize:[0,0] });
-                            if (otherMarkers[doc.id]) otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
-                            else otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
-                        }
-                    } else if (otherMarkers[doc.id]) {
-                        map.removeLayer(otherMarkers[doc.id]); delete otherMarkers[doc.id];
+    setInterval(async () => {
+        const snap = await db.collection(getPublicPath('drivers')).get();
+
+        const now = new Date();
+        let count = 0;
+
+        snap.forEach(doc => {
+            const d = doc.data();
+            if (d.lat === undefined || d.lng === undefined) return;
+
+            const age = now - (d.updatedAt?.toDate() || now);
+
+            if (age < 3600000) {
+                count++;
+
+                if (user && doc.id !== user.uid && map) {
+                    const icon = L.divIcon({
+                        html: createMarkerHtml(d.name, d.status),
+                        className: '',
+                        iconSize:[0,0]
+                    });
+
+                    if (otherMarkers[doc.id]) {
+                        otherMarkers[doc.id]
+                          .setLatLng([d.lat, d.lng])
+                          .setIcon(icon);
+                    } else {
+                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
                     }
-                });
-                document.getElementById('online-count').innerText = count;
-            }, (err) => console.log("Listener error", err));
-        }
+                }
+
+            } else if (otherMarkers[doc.id]) {
+                map.removeLayer(otherMarkers[doc.id]);
+                delete otherMarkers[doc.id];
+            }
+        });
+
+        document.getElementById('online-count').innerText = count;
+
+    }, 30000); // ←30秒
+}
 
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
         async function refreshRanking() {
