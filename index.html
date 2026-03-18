@@ -980,6 +980,30 @@ loadPrediction()
 }
 
 },300000)
+
+        async function loadPrediction() {
+
+  const res = await fetch(GAS_URL + "?mode=predict");
+  const data = await res.json();
+
+  console.log(data);
+
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+  }
+
+  const heatData = data.map(item => [
+    item.lat,
+    item.lng,
+    item.amount
+  ]);
+
+  heatLayer = L.heatLayer(heatData, {
+    radius: 25,
+    blur: 15
+  }).addTo(map);
+}
+        
         window.onload = initApp;
 
         document.getElementById('btn-save-settings').onclick = async () => {
