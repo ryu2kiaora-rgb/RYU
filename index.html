@@ -790,21 +790,53 @@ drawHeatmap(data)
 
 function drawHeatmap(points){
 
-const heatData=points.map(p=>[
-p.lat,
-p.lng,
-Math.min(p.amount/2000,1)
-])
+  if(!points || points.length === 0) return;
 
-if(heatLayer) map.removeLayer(heatLayer)
+  // ===== グリッド化（見えるようにする核心）=====
+  const grid = {};
 
-heatLayer=L.heatLayer(heatData,{
-radius:25,
-blur:20
-}).addTo(map)
+  points.forEach(p => {
 
-}
-        
+    if(!p.lat || !p.lng) return;
+
+    const key =
+      Math.floor(p.lat * 100) / 100 + "_" +
+      Math.floor(p.lng * 100) / 100;
+
+    if(!grid[key]){
+      grid[key] = { lat:0, lng:0, count:0, amount:0 };
+    }
+
+    grid[key].lat += p.lat;
+    grid[key].lng += p.lng;
+    grid[key].count += 1;
+    grid[key].amount += p.amount || 1;
+  });
+
+  const heatData = Object.values(grid).map(g => [
+    g.lat / g.count,
+    g.lng / g.count,
+    Math.min(g.amount / 3000, 1) // ← 強さ調整OK
+  ]);
+
+  // ===== 既存削除 =====
+  if(heatLayer) map.removeLayer(heatLayer);
+
+  // ===== ズームでサイズ変える =====
+  const zoom = map.getZoom();
+
+  const radius =
+    zoom < 13 ? 50 :
+    zoom < 15 ? 35 :
+    zoom < 17 ? 25 : 15;
+
+  // ===== 描画 =====
+  heatLayer = L.heatLayer(heatData, {
+    radius: radius,
+    blur: 25,
+    maxZoom: 17
+  }).addTo(map);
+}        
         function createMarkerHtml(name, status) {
             const color = status === 'occupied' ? '#ef4444' : '#3b82f6';
             return `<div class="driver-marker-container">
