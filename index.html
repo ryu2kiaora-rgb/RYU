@@ -533,8 +533,13 @@ document.addEventListener("visibilitychange", () => {
 });
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
-        function listenToDrivers() {
-    setInterval(async () => {
+let fetchDrivers;
+
+function listenToDrivers() {
+    if (driverListenerStarted) return;
+    driverListenerStarted = true;
+
+    fetchDrivers = async () => {
         const snap = await db.collection(getPublicPath('drivers')).get();
 
         const now = new Date();
@@ -572,8 +577,10 @@ document.addEventListener("visibilitychange", () => {
         });
 
         document.getElementById('online-count').innerText = count;
+    };
 
-    }, 30000); // ←30秒
+    fetchDrivers(); // ← ★最初は即
+    setInterval(fetchDrivers, 15000); // ←15秒おすすめ
 }
 
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
@@ -722,6 +729,8 @@ logId:editingLogId
             document.getElementById('driver-controls').classList.remove('hidden');
             document.getElementById('header-btn-end-shift').classList.remove('hidden');
             startGPS();
+
+            if (fetchDrivers) fetchDrivers(); // ← ★これ追加
         };
 
         document.getElementById('btn-ride-on').onclick = () => {
@@ -1016,6 +1025,9 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
             // 権限エラーでもUIはリセットしたい場合、ここはあえて空にするかログ出力のみに留めます
         }
     }
+
+        // ★ここに追加（超重要）
+    if (fetchDrivers) fetchDrivers();
 
     // 4. マーカーと変数のクリーンアップ
     if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
