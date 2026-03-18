@@ -669,7 +669,6 @@ document.addEventListener("visibilitychange", () => {
 
             const sPos = editStartMarker.getLatLng();
             const ePos = editEndMarker.getLatLng();
-fetch(GAS_URL + "?mode=predict30")
             const path = getPrivatePath('sales');
             if (path && editingLogId) {
                 await db.doc(`${path}/${editingLogId}`).update({ 
