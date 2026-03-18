@@ -698,7 +698,7 @@ await fetch(GAS_URL, {
 
         document.getElementById('btn-edit-delete').onclick = async () => {
             if (!confirm('この乗車記録を削除しますか？')) return;
-            const path = getPrivatePath('sales');
+           const path = getPrivatePath('sales');
             if (path && editingLogId) {
                 await db.doc(`${path}/${editingLogId}`).delete();
 
