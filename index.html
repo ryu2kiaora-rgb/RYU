@@ -383,6 +383,9 @@ data.endLng
                     listenToSales();
                     listenToDrivers();
                     refreshRanking(); // リアルタイムではなく、初回のみ手動取得
+
+                    syncStatusToFirestore(true); // ← ★これ追加！！
+                    
                     document.getElementById('auth-loading-ui').classList.add('hidden');
                     if (userName) {
                         updateNameDisplay();
@@ -424,24 +427,19 @@ async function syncStatusToFirestore(force = false) {
         if (distance < 30) return;
     }
 
-    const todayStr = getBusinessDate(new Date());
+const todayStr = getBusinessDate(new Date());
 
-    const todayTotal = salesLogs
-        .filter(l => l.dateStr === todayStr)
-        .reduce((s, l) => s + l.amount, 0);
-
-    try {
-
-        await db
-            .doc(`${getPublicPath('drivers')}/${user.uid}`)
-            .set({
-                name: userName,
-                lat: currentLat,
-                lng: currentLng,
-                status: isDriving ? "occupied" : "on",
-                todaySales: todayTotal,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+await db
+  .doc(`${getPublicPath('drivers')}/${user.uid}`)
+  .set({
+      name: userName,
+      lat: currentLat,
+      lng: currentLng,
+      status: isDriving ? "occupied" : "on",
+      todaySales: todayTotal,
+      businessDate: todayStr, // ←これ追加！！
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
 
         lastLat = currentLat;
         lastLng = currentLng;
@@ -581,8 +579,10 @@ async function refreshRanking() {
     try {
         const snap = await db.collection(getPublicPath('drivers')).get();
 
+        const todayStr = getBusinessDate(new Date());
+
         const rankingData = snap.docs.map(doc => doc.data())
-            .filter(d => !d.updatedAt || (new Date() - d.updatedAt.toDate()) < 86400000)
+            .filter(d => d.businessDate === todayStr) // ←ここ重要
             .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0))
             .slice(0, 5);
 
