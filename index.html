@@ -459,7 +459,7 @@ function startGPS() {
     watchId = navigator.geolocation.watchPosition((pos) => {
 
         // GPS精度が悪い場合は無視（iPhone対策）
-        if (pos.coords.accuracy > 80) return;
+        if (pos.coords.accuracy > 120) return;
 
         const { latitude: lat, longitude: lng } = pos.coords;
 
@@ -501,8 +501,16 @@ function startGPS() {
     });
 
     // 書き込みを60秒ごとに制限
-    syncInterval = setInterval(() => syncStatusToFirestore(), 60000);
+    function startSyncInterval() {
 
+    if (syncInterval) clearInterval(syncInterval);
+
+    const interval = isDriving ? 15000 : 60000;
+
+    syncInterval = setInterval(() => {
+        syncStatusToFirestore();
+    }, interval);
+}
 }
 
 
@@ -727,6 +735,8 @@ logId:editingLogId
                 const sec = Math.floor((Date.now() - rideStartTimestamp)/1000);
                 document.getElementById('timer-display').innerText = `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;
             }, 1000);
+                // ★ここに追加！！
+    startSyncInterval();
         };
 
         document.getElementById('btn-ride-off').onclick = () => {
@@ -738,6 +748,8 @@ logId:editingLogId
             if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
             syncStatusToFirestore(true); // 状態変化時は即送信
             document.getElementById('modal-payment').classList.remove('hidden');
+
+            startSyncInterval();
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
