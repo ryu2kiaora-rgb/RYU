@@ -941,9 +941,23 @@ function getBusinessTimestamp(log){
   .filter(l => l.dateStr === ds)
   .sort((a,b) => getBusinessTimestamp(b) - getBusinessTimestamp(a));
             const container = document.getElementById('ride-logs'); if (!container) return;
-            document.getElementById('footer-daily-total').innerText = `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-            document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
-            document.getElementById('summary-date-label').innerText = `${ds.replace(/-/g,'/')} の概要`;
+            document.getElementById('footer-daily-total').innerText =
+  `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+
+document.getElementById('footer-daily-count').innerText =
+  `${logs.length}回`;
+
+// ★追加ここから
+const total = logs.reduce((s, l) => s + l.amount, 0);
+const avg = logs.length > 0 ? Math.round(total / logs.length) : 0;
+
+document.getElementById('footer-avg-price').innerText =
+  logs.length > 0 ? `¥${avg.toLocaleString()}` : '--';
+// ★追加ここまで
+
+document.getElementById('summary-date-label').innerText =
+  `${ds.replace(/-/g,'/')} の概要`;
+
             
             container.innerHTML = logs.length ? logs.map(l => `
                 <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all" onclick="openEditLog('${l.id}')">
