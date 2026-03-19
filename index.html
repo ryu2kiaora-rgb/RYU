@@ -403,15 +403,7 @@ data.endLng
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
         }
 
-                // ===== 現在地ボタンの追加コード =====
-        document.getElementById('btn-recenter').onclick = () => {
-            if (userMarker) {
-                const latlng = userMarker.getLatLng();
-                map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
-            } else {
-                alert("位置情報を取得中です。開始までお待ちください。");
-            }
-        };
+
 
 // ===== Firebase節約モード（改良版） =====
 async function syncStatusToFirestore(force = false) {
