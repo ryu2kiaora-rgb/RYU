@@ -859,6 +859,21 @@ function getBusinessDate(date){
 
     return formatDate(d);
 }
+        // ===== ★追加：営業日考慮タイムスタンプ =====
+function getBusinessTimestamp(log){
+
+    const [h,m] = log.timeStr.split(':').map(Number);
+
+    const d = new Date(log.dateStr);
+
+    d.setHours(h, m, 0, 0);
+
+    if(h < 12){
+        d.setDate(d.getDate() - 1);
+    }
+
+    return d.getTime();
+}
 
         function getPeriodRange(date, closing) {
             let start, end; const y = date.getFullYear(), m = date.getMonth(), d = date.getDate();
@@ -922,7 +937,9 @@ function getBusinessDate(date){
         }
 
         function showDailyDetail(ds) {
-            const logs = salesLogs.filter(l => l.dateStr === ds).sort((a,b) => b.timeStr.localeCompare(a.timeStr));
+            const logs = salesLogs
+  .filter(l => l.dateStr === ds)
+  .sort((a,b) => getBusinessTimestamp(b) - getBusinessTimestamp(a));
             const container = document.getElementById('ride-logs'); if (!container) return;
             document.getElementById('footer-daily-total').innerText = `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
             document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
