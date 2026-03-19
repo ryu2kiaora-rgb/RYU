@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -578,29 +577,20 @@ document.addEventListener("visibilitychange", () => {
 }
 
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
-async function refreshRanking() {
-    try {
-        const snap = await db.collection(getPublicPath('drivers')).get();
-
-        const rankingData = snap.docs.map(doc => doc.data())
-            .filter(d => !d.updatedAt || (new Date() - d.updatedAt.toDate()) < 86400000)
-            .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0))
-            .slice(0, 5);
-
-        const rankList = document.getElementById('ranking-list');
-
-        rankList.innerHTML = rankingData.length
-            ? rankingData.map((d, i) => `
-                <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
-                    <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
-                    <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
-                </div>`).join('')
-            : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
-
-    } catch(e) {
-        console.log("ランキング取得エラー", e);
-    }
-}
+        async function refreshRanking() {
+            try {
+                const snap = await db.collection(getPublicPath('drivers')).get();
+                const rankingData = snap.docs.map(doc => doc.data())
+                    .filter(d => (new Date() - (d.updatedAt?.toDate() || 0)) < 86400000)
+                    .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0)).slice(0, 5);
+                const rankList = document.getElementById('ranking-list');
+                rankList.innerHTML = rankingData.length ? rankingData.map((d, i) => `
+                    <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
+                        <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
+                        <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
+                    </div>`).join('') : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
+            } catch(e) {}
+        }
 
         // [節約モード] 売上ログの取得を直近30日分に制限
         function listenToSales() {
@@ -641,7 +631,6 @@ async function refreshRanking() {
             showDailyDetail(selectedDateStr);
             // 本日の売上が変わったので、他者へ通知するために1回送信
             syncStatusToFirestore(true);
-            refreshRanking(); 
         }
 
         // Logic for Editing
@@ -763,13 +752,12 @@ logId:editingLogId
             startSyncInterval();
         };
 
-       document.getElementById('btn-pay-submit').onclick = async () => {
+        document.getElementById('btn-pay-submit').onclick = async () => {
             const amount = parseInt(currentInputAmount) || 0;
             if (amount <= 0) return;
             const now = new Date();
             const data = { 
-                amount, 
-                dateStr: getBusinessDate(now), 
+                amount, dateStr: getBusinessDate(now), 
                 timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
                 pickupTime: rideStartTimestamp,
                 dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
@@ -781,13 +769,8 @@ logId:editingLogId
             const path = getPrivatePath('sales');
             if (path) {
                 const docRef = await db.collection(path).add(data);
-                sendToGAS(data,docRef.id);
-                
-                // ★ここが重要：自分の最新の合計売上をランキング板(drivers)に即座に反映させる
-                await syncStatusToFirestore(true); 
-                
-                // その後、最新のランキング画面を読み込む
-                refreshRanking(); 
+                sendToGAS(data,docRef.id)
+                refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
             currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
@@ -1090,28 +1073,6 @@ loadPrediction()
         
         window.onload = initApp;
 
-        // ★ここに追加
-// ★修正版
-document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-        console.log("復帰処理を開始します");
-
-        // 現在地を再取得してFirebaseに送る
-        navigator.geolocation.getCurrentPosition((pos) => {
-            currentLat = pos.coords.latitude;
-            currentLng = pos.coords.longitude;
-            syncStatusToFirestore(true);
-        }, (err) => {
-            console.log("位置再取得エラー:", err);
-        });
-
-        // 既存のstartGPS関数を呼び出して監視を再開
-        startGPS(); 
-        
-        // ランキングもついでに更新
-        refreshRanking();
-    }
-});
         document.getElementById('btn-save-settings').onclick = async () => {
             const newName = document.getElementById('setting-user-name').value.trim();
             const newClosing = parseInt(document.getElementById('setting-closing-day').value);
@@ -1162,6 +1123,5 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 </body>
 </html>
-
 
 
