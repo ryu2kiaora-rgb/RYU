@@ -763,12 +763,13 @@ logId:editingLogId
             startSyncInterval();
         };
 
-        document.getElementById('btn-pay-submit').onclick = async () => {
+       document.getElementById('btn-pay-submit').onclick = async () => {
             const amount = parseInt(currentInputAmount) || 0;
             if (amount <= 0) return;
             const now = new Date();
             const data = { 
-                amount, dateStr: getBusinessDate(now), 
+                amount, 
+                dateStr: getBusinessDate(now), 
                 timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
                 pickupTime: rideStartTimestamp,
                 dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
@@ -780,8 +781,13 @@ logId:editingLogId
             const path = getPrivatePath('sales');
             if (path) {
                 const docRef = await db.collection(path).add(data);
-                sendToGAS(data,docRef.id)
-                refreshRanking(); // 売上が増えたのでランキングを再取得
+                sendToGAS(data,docRef.id);
+                
+                // ★ここが重要：自分の最新の合計売上をランキング板(drivers)に即座に反映させる
+                await syncStatusToFirestore(true); 
+                
+                // その後、最新のランキング画面を読み込む
+                refreshRanking(); 
             }
             document.getElementById('modal-payment').classList.add('hidden');
             currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
