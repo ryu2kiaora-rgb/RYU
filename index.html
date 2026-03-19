@@ -423,23 +423,28 @@ async function syncStatusToFirestore(force = false) {
             currentLng
         );
 
-        // 30m未満は送信しない（80m→改善）
         if (distance < 30) return;
     }
 
-const todayStr = getBusinessDate(new Date());
+    const todayStr = getBusinessDate(new Date());
 
-await db
-  .doc(`${getPublicPath('drivers')}/${user.uid}`)
-  .set({
-      name: userName,
-      lat: currentLat,
-      lng: currentLng,
-      status: isDriving ? "occupied" : "on",
-      todaySales: todayTotal,
-      businessDate: todayStr, // ←これ追加！！
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
+    try {  // ← ★これ追加
+
+        const todayTotal = salesLogs
+            .filter(l => l.dateStr === todayStr)
+            .reduce((s, l) => s + l.amount, 0);
+
+        await db
+          .doc(`${getPublicPath('drivers')}/${user.uid}`)
+          .set({
+              name: userName,
+              lat: currentLat,
+              lng: currentLng,
+              status: isDriving ? "occupied" : "on",
+              todaySales: todayTotal,
+              businessDate: todayStr,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
 
         lastLat = currentLat;
         lastLng = currentLng;
