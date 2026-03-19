@@ -779,8 +779,16 @@ logId:editingLogId
             const path = getPrivatePath('sales');
             if (path) {
                 const docRef = await db.collection(path).add(data);
-                sendToGAS(data,docRef.id)
-                refreshRanking(); // 売上が増えたのでランキングを再取得
+
+// ★これを追加（最重要）
+await db.doc(`${getPublicPath('drivers')}/${user.uid}`).set({
+    todaySales: firebase.firestore.FieldValue.increment(amount)
+}, { merge: true });
+
+sendToGAS(data,docRef.id);
+
+// 再取得
+refreshRanking();
             }
             document.getElementById('modal-payment').classList.add('hidden');
             currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
