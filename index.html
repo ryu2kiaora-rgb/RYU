@@ -1085,23 +1085,27 @@ loadPrediction()
         window.onload = initApp;
 
         // ★ここに追加
+// ★修正版
 document.addEventListener("visibilitychange", () => {
-
     if (!document.hidden) {
+        console.log("復帰処理を開始します");
 
-        console.log("復帰");
-
+        // 現在地を再取得してFirebaseに送る
         navigator.geolocation.getCurrentPosition((pos) => {
             currentLat = pos.coords.latitude;
             currentLng = pos.coords.longitude;
             syncStatusToFirestore(true);
+        }, (err) => {
+            console.log("位置再取得エラー:", err);
         });
 
-        restartGPS();
-        startSyncInterval();
+        // 既存のstartGPS関数を呼び出して監視を再開
+        startGPS(); 
+        
+        // ランキングもついでに更新
+        refreshRanking();
     }
 });
-
         document.getElementById('btn-save-settings').onclick = async () => {
             const newName = document.getElementById('setting-user-name').value.trim();
             const newClosing = parseInt(document.getElementById('setting-closing-day').value);
