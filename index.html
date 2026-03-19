@@ -577,20 +577,29 @@ document.addEventListener("visibilitychange", () => {
 }
 
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
-        async function refreshRanking() {
-            try {
-                const snap = await db.collection(getPublicPath('drivers')).get();
-                const rankingData = snap.docs.map(doc => doc.data())
-                    .filter(d => (new Date() - (d.updatedAt?.toDate() || 0)) < 86400000)
-                    .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0)).slice(0, 5);
-                const rankList = document.getElementById('ranking-list');
-                rankList.innerHTML = rankingData.length ? rankingData.map((d, i) => `
-                    <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
-                        <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
-                        <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
-                    </div>`).join('') : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
-            } catch(e) {}
-        }
+async function refreshRanking() {
+    try {
+        const snap = await db.collection(getPublicPath('drivers')).get();
+
+        const rankingData = snap.docs.map(doc => doc.data())
+            .filter(d => !d.updatedAt || (new Date() - d.updatedAt.toDate()) < 86400000)
+            .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0))
+            .slice(0, 5);
+
+        const rankList = document.getElementById('ranking-list');
+
+        rankList.innerHTML = rankingData.length
+            ? rankingData.map((d, i) => `
+                <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
+                    <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
+                    <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
+                </div>`).join('')
+            : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
+
+    } catch(e) {
+        console.log("ランキング取得エラー", e);
+    }
+}
 
         // [節約モード] 売上ログの取得を直近30日分に制限
         function listenToSales() {
@@ -631,6 +640,7 @@ document.addEventListener("visibilitychange", () => {
             showDailyDetail(selectedDateStr);
             // 本日の売上が変わったので、他者へ通知するために1回送信
             syncStatusToFirestore(true);
+            refreshRanking(); 
         }
 
         // Logic for Editing
