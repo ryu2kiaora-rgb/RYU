@@ -453,6 +453,19 @@ async function syncStatusToFirestore(force = false) {
         console.log("sync error", e);
     }
 }
+        let syncTimer = null;
+
+function startSyncInterval() {
+
+    if (syncTimer) clearInterval(syncTimer);
+
+    const interval = isDriving ? 15000 : 60000;
+
+    syncTimer = setInterval(() => {
+        syncStatusToFirestore();
+    }, interval);
+
+}
 // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
 function startGPS() {
 
