@@ -1073,6 +1073,24 @@ loadPrediction()
         
         window.onload = initApp;
 
+        // ★ここに追加
+document.addEventListener("visibilitychange", () => {
+
+    if (!document.hidden) {
+
+        console.log("復帰");
+
+        navigator.geolocation.getCurrentPosition((pos) => {
+            currentLat = pos.coords.latitude;
+            currentLng = pos.coords.longitude;
+            syncStatusToFirestore(true);
+        });
+
+        restartGPS();
+        startSyncInterval();
+    }
+});
+
         document.getElementById('btn-save-settings').onclick = async () => {
             const newName = document.getElementById('setting-user-name').value.trim();
             const newClosing = parseInt(document.getElementById('setting-closing-day').value);
