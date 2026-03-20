@@ -329,6 +329,8 @@ function calcDistance(lat1, lon1, lat2, lon2) {
 }
         function sendToGAS(data,logId){
 
+            const pickupDate = new Date(data.pickupTime);
+            
 fetch(GAS_URL,{
 method:"POST",
 body:JSON.stringify({
@@ -342,8 +344,8 @@ userName:userName,
 date:data.dateStr,
 weekday:new Date().getDay(),
 
-hour:new Date().getHours(),
-minute:new Date().getMinutes(),
+hour: pickupDate.getHours(),
+minute: pickupDate.getMinutes(),
 
 pickupLat:data.startLat,
 pickupLng:data.startLng,
