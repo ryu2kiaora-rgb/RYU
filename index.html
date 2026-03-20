@@ -67,7 +67,7 @@
             <div class="absolute top-4 left-4 z-[500]">
                 <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
                     <p class="text-[10px] font-bold text-gray-400 mb-1 uppercase tracking-wider flex items-center">
-                        <i class="fas fa-trophy text-yellow-500 mr-1"></i> 本日TOP5
+                        <i class="fas fa-trophy text-yellow-500 mr-1"></i>ランキング（昼12時ﾘｾｯﾄ）
                     </p>
                     <div id="ranking-list" class="space-y-1 text-[10px]">
                         <p class="text-[9px] text-gray-400 italic">読込中...</p>
@@ -1180,7 +1180,7 @@ function renderRanking(data){
 
   // タイトルに何のランキングかを明示
   let html = `<div style="font-weight:bold;margin-bottom:6px; color:#FFD700;">
-      <i class="fas fa-trophy mr-1"></i>${type}ランキングTOP5
+      <i class="fas fa-trophy mr-1"></i>${type}Ranking TOP5
     </div>`;
 
   top5.forEach((d,i)=>{
@@ -1206,8 +1206,8 @@ function renderRanking(data){
   if(lastUpdate){
     const h = String(lastUpdate.getHours()).padStart(2,'0');
     const m = String(lastUpdate.getMinutes()).padStart(2,'0');
-    html += `<div style="margin-top:4px;font-size:10px;color:#ffffff;">
-      更新: ${h}:${m} （自動更新: 毎時00分と30分）
+    html += `<div style="margin-top:4px;font-size:10px;color:#ff0000;">
+      更新: ${h}:${m} （15分毎 自動更新）
     </div>`;
   }
 
