@@ -729,16 +729,22 @@ logId:editingLogId
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
 
-        const btn = document.getElementById('btn-start-shift');
+        document.addEventListener("DOMContentLoaded", () => {
 
-if(btn){
-  btn.onclick = () => {
-    document.getElementById('shift-overlay').classList.add('hidden');
-    document.getElementById('driver-controls').classList.remove('hidden');
-    document.getElementById('header-btn-end-shift').classList.remove('hidden');
-    startGPS();
-  };
-}
+  const btn = document.getElementById('btn-start-shift');
+
+  if(btn){
+    btn.onclick = () => {
+      document.getElementById('shift-overlay')?.classList.add('hidden');
+      document.getElementById('driver-controls')?.classList.remove('hidden');
+      document.getElementById('header-btn-end-shift')?.classList.remove('hidden');
+      startGPS();
+    };
+  } else {
+    console.error("btn-start-shift が見つからない");
+  }
+
+});
 
         document.getElementById('btn-ride-on').onclick = () => {
             isDriving = true; rideStartTimestamp = Date.now();
