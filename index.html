@@ -19,7 +19,7 @@
         .driver-icon-inner { font-size: 20px; text-shadow: 0 0 3px #fff; transition: all 0.5s linear; }
         
         #shift-overlay { 
-            position: absolute;
+            position: absolute; 
             top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(15, 23, 42, 0.9); 
             z-index: 900; display: flex; align-items: center; justify-content: center; 
@@ -228,15 +228,15 @@
         </button>
     </nav>
 
-    <!-- ment Modal -->
-    <div id="modal-ment" class="hidden fixed inset-0 bg-black/60 z-[3000] flex items-center justify-center p-4">
+    <!-- Payment Modal -->
+    <div id="modal-payment" class="hidden fixed inset-0 bg-black/60 z-[3000] flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-6 w-full max-w-sm">
             <h3 class="text-lg font-bold mb-4 text-center">売上金額入力</h3>
             <div class="text-3xl font-mono text-center bg-slate-50 p-6 rounded-2xl mb-4 text-blue-600" id="input-display">¥ 0</div>
             <div id="numpad" class="grid grid-cols-3 gap-3 mb-6"></div>
             <div class="flex gap-3">
-                <button id="btn--cancel" class="flex-1 bg-slate-100 py-4 rounded-xl font-bold" onclick="document.getElementById('modal-ment').classList.add('hidden')">戻る</button>
-                <button id="btn--submit" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold">確定</button>
+                <button id="btn-pay-cancel" class="flex-1 bg-slate-100 py-4 rounded-xl font-bold" onclick="document.getElementById('modal-payment').classList.add('hidden')">戻る</button>
+                <button id="btn-pay-submit" class="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold">確定</button>
             </div>
         </div>
     </div>
@@ -327,60 +327,47 @@ function calcDistance(lat1, lon1, lat2, lon2) {
 
     return R * c;
 }
-function sendToGAS(data, logId){
+        function sendToGAS(data,logId){
 
-  // 🔥 乗車時間を確実に取得（localStorage優先）
-  const pickupTime = Number(localStorage.getItem("rideStart")) || data.pickupTime;
+fetch(GAS_URL,{
+method:"POST",
+body:JSON.stringify({
 
-  if(!pickupTime){
-    console.error("pickupTimeが取得できない");
-    return;
-  }
+mode:"add",
 
-  const pickupDate = new Date(pickupTime);
-  const dropTime = Date.now();
+logId:logId,
+driverId:user.uid,
+userName:userName,
 
-  fetch(GAS_URL,{
-    method:"POST",
-    body:JSON.stringify({
+date:data.dateStr,
+weekday:new Date().getDay(),
 
-      mode:"add",
+hour:new Date().getHours(),
+minute:new Date().getMinutes(),
 
-      logId:logId,
-      driverId:user.uid,
-      userName:userName,
+pickupLat:data.startLat,
+pickupLng:data.startLng,
+pickupTime:data.pickupTime,
 
-      date:data.dateStr,
-      weekday: pickupDate.getDay(), // ← 乗車基準に修正
+dropLat:data.endLat,
+dropLng:data.endLng,
+dropTime:Date.now(),
 
-      // 🔥 ここが今回の本命修正
-      hour: pickupDate.getHours(),
-      minute: pickupDate.getMinutes(),
+amount:data.amount,
 
-      pickupLat:data.startLat,
-      pickupLng:data.startLng,
-      pickupTime: pickupTime,
+duration: Math.round((Date.now() - data.pickupTime) / 1000 / 60 * 100) / 100,
 
-      dropLat:data.endLat,
-      dropLng:data.endLng,
-      dropTime: dropTime,
+distance:calcDistance(
+data.startLat,
+data.startLng,
+data.endLat,
+data.endLng
+)
 
-      amount:data.amount,
+})
 
-      duration: Math.round((dropTime - pickupTime) / 1000 / 60 * 100) / 100,
+})
 
-      distance:calcDistance(
-        data.startLat,
-        data.startLng,
-        data.endLat,
-        data.endLng
-      )
-
-    })
-  });
-
-  // 🔥 送信後リセット（超重要）
-  localStorage.removeItem("rideStart");
 }
         
         // Path Helpers
@@ -761,7 +748,7 @@ logId:editingLogId
             document.getElementById('btn-ride-off').classList.add('hidden');
             if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'on'), className: '', iconSize:[0,0] }));
             syncStatusToFirestore(true); // 状態変化時は即送信
-            document.getElementById('modal-ment').classList.remove('hidden');
+            document.getElementById('modal-payment').classList.remove('hidden');
 
             startSyncInterval();
         };
