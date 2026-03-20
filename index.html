@@ -327,51 +327,36 @@ function calcDistance(lat1, lon1, lat2, lon2) {
 
     return R * c;
 }
-        const pickupDate = new Date(data.pickupTime);
+function sendToGAS(data, logId){
+    const pickupDate = new Date(data.pickupTime);
 
-// 日付生成（カレンダー）
-const dateStr = pickupDate.getFullYear() + "-" +
-  String(pickupDate.getMonth()+1).padStart(2,'0') + "-" +
-  String(pickupDate.getDate()).padStart(2,'0');
+    // カレンダー日付生成
+    const dateStr = pickupDate.getFullYear() + "-" +
+                    String(pickupDate.getMonth()+1).padStart(2,'0') + "-" +
+                    String(pickupDate.getDate()).padStart(2,'0');
 
-fetch(GAS_URL,{
-method:"POST",
-body:JSON.stringify({
-
-mode:"add",
-
-logId:logId,
-driverId:user.uid,
-userName:userName,
-
-date: dateStr,
-weekday: pickupDate.getDay(),
-
-hour: pickupDate.getHours(),
-minute: pickupDate.getMinutes(),
-
-pickupLat:data.startLat,
-pickupLng:data.startLng,
-pickupTime:data.pickupTime,
-
-dropLat:data.endLat,
-dropLng:data.endLng,
-dropTime:Date.now(),
-
-amount:data.amount,
-
-duration: Math.round((Date.now() - data.pickupTime) / 1000 / 60 * 100) / 100,
-
-distance:calcDistance(
-data.startLat,
-data.startLng,
-data.endLat,
-data.endLng
-)
-
-})
-})
-
+    fetch(GAS_URL,{
+        method:"POST",
+        body:JSON.stringify({
+            mode: "add",
+            logId: logId,
+            driverId: user.uid,
+            userName: userName,
+            date: dateStr,
+            weekday: pickupDate.getDay(),
+            hour: pickupDate.getHours(),
+            minute: pickupDate.getMinutes(),
+            pickupLat: data.startLat,
+            pickupLng: data.startLng,
+            pickupTime: data.pickupTime,
+            dropLat: data.endLat,
+            dropLng: data.endLng,
+            dropTime: Date.now(),
+            amount: data.amount,
+            duration: Math.round((Date.now() - data.pickupTime)/1000/60*100)/100,
+            distance: calcDistance(data.startLat,data.startLng,data.endLat,data.endLng)
+        })
+    });
 }
         
         // Path Helpers
