@@ -282,6 +282,8 @@
     </script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
+
+
     <script>
         // Configuration
         const firebaseConfig = {
@@ -293,7 +295,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbyebReoBdiQBwebtQaUDWuaSEuyYlYRAR2vDbve0w2rbo07W1LOghFGrUd5Saypl6TU1Q/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbzTAWzONOSGfbImXcbp3D899e4Dh5lmNNVGLsKk65_I498G9OXTP3wtMFW1itX7SQlcKg/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -1113,5 +1115,104 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     document.getElementById("shift-overlay").style.display = "flex";
 };
     </script>
+
+    <script>
+/* ------------------------
+  自分のIDを取得
+------------------------ */
+const MY_ID = localStorage.getItem("driverId") || null;
+
+/* ------------------------
+  GASからランキングデータ取得
+------------------------ */
+async function loadRankingData() {
+  try {
+    const res = await fetch(GAS_URL + "?mode=ranking");
+    const data = await res.json();
+
+    const map = {};
+
+    data.forEach(d => {
+      if(!map[d.driverId]) {
+        map[d.driverId] = { id: d.driverId, name: d.userName, sales: 0, count: 0, max: 0 };
+      }
+      map[d.driverId].sales += d.amount;
+      map[d.driverId].count++;
+      map[d.driverId].max = Math.max(map[d.driverId].max, d.amount);
+    });
+
+    const list = Object.values(map);
+
+    return list.sort((a,b) => b.sales - a.sales).slice(0,5); // 売上TOP5のみ
+  } catch(e) {
+    console.error("ランキング取得エラー", e);
+    return [];
+  }
+}
+
+/* ------------------------
+  ランキングUI作成
+------------------------ */
+function createRankingUI() {
+  if(document.getElementById("rankingBox")) return; // 既に作成済み
+
+  const div = document.createElement("div");
+  div.id = "rankingBox";
+  div.style.position = "fixed";
+  div.style.bottom = "20px";
+  div.style.right = "10px";
+  div.style.width = "220px";
+  div.style.padding = "10px";
+  div.style.background = "rgba(0,0,0,0.5)";
+  div.style.color = "#fff";
+  div.style.borderRadius = "10px";
+  div.style.zIndex = 9999;
+  div.style.fontSize = "13px";
+  document.body.appendChild(div);
+}
+
+/* ------------------------
+  ランキング描画
+------------------------ */
+function renderRanking(data) {
+  const box = document.getElementById("rankingBox");
+  if(!box) return;
+
+  let html = "<div style='font-weight:bold;margin-bottom:6px;'>💰 売上TOP5</div>";
+
+  data.forEach((d,i) => {
+    const isMe = String(d.id) === String(MY_ID);
+    html += `<div style="display:flex;justify-content:space-between; padding:3px 0;
+      background:${isMe ? "rgba(255,215,0,0.2)" : "transparent"};
+      font-weight:${i===0?"bold":"normal"};">
+      <span>${i+1}. ${d.name}</span>
+      <span>¥${d.sales}</span>
+      ${isMe?" ←自分":""}
+    </div>`;
+  });
+
+  box.innerHTML = html;
+}
+
+/* ------------------------
+  起動関数
+------------------------ */
+async function startRanking() {
+  createRankingUI();
+
+  let data = await loadRankingData();
+  renderRanking(data);
+
+  // 30分ごとにデータ更新
+  setInterval(async () => {
+    data = await loadRankingData();
+    renderRanking(data);
+  }, 1800000); // 30分 = 1800000ms
+}
+
+// ページロード時に起動
+startRanking();
+</script>
+    
 </body>
 </html>
