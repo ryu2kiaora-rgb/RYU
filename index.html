@@ -1116,54 +1116,62 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 };
     </script>
 
-    <script>
-/* ------------------------
-  自分のIDを取得
------------------------- */
+   <script>
 const MY_ID = localStorage.getItem("driverId") || null;
+let lastUpdate = null;
+const slideInterval = 5000; // スライド切替5秒
+let currentSlide = 0;
 
-/* ------------------------
-  GASからランキングデータ取得
------------------------- */
+// スライド表示種類
+const slideTypes = ["売上", "平均単価", "件数", "高単価"];
+
 async function loadRankingData() {
   try {
     const res = await fetch(GAS_URL + "?mode=ranking");
     const data = await res.json();
 
-    const map = {};
-
-    data.forEach(d => {
-      if(!map[d.driverId]) {
-        map[d.driverId] = { id: d.driverId, name: d.userName, sales: 0, count: 0, max: 0 };
+    // データを集計
+    const summary = {};
+    data.forEach(d=>{
+      if(!summary[d.driverId]){
+        summary[d.driverId] = {userName: d.userName, amount:0, count:0, max:0};
       }
-      map[d.driverId].sales += d.amount;
-      map[d.driverId].count++;
-      map[d.driverId].max = Math.max(map[d.driverId].max, d.amount);
+      summary[d.driverId].amount += d.amount;
+      summary[d.driverId].count += 1;
+      summary[d.driverId].max = Math.max(summary[d.driverId].max, d.amount);
     });
 
-    const list = Object.values(map);
+    // 配列に変換
+    const arr = Object.keys(summary).map(id=>{
+      const v = summary[id];
+      return {
+        driverId: id,
+        userName: v.userName,
+        totalAmount: v.amount,
+        count: v.count,
+        avgAmount: Math.round(v.amount/v.count),
+        maxAmount: v.max
+      };
+    });
 
-    return list.sort((a,b) => b.sales - a.sales).slice(0,5); // 売上TOP5のみ
-  } catch(e) {
+    lastUpdate = new Date();
+    return arr;
+  } catch(e){
     console.error("ランキング取得エラー", e);
     return [];
   }
 }
 
-/* ------------------------
-  ランキングUI作成
------------------------- */
 function createRankingUI() {
-  if(document.getElementById("rankingBox")) return; // 既に作成済み
-
+  if(document.getElementById("rankingBox")) return;
   const div = document.createElement("div");
   div.id = "rankingBox";
   div.style.position = "fixed";
-  div.style.bottom = "20px";
-  div.style.right = "10px";
-  div.style.width = "220px";
+  div.style.top = "10px";
+  div.style.left = "10px";
+  div.style.width = "260px";
   div.style.padding = "10px";
-  div.style.background = "rgba(0,0,0,0.5)";
+  div.style.background = "rgba(0,0,0,0.6)";
   div.style.color = "#fff";
   div.style.borderRadius = "10px";
   div.style.zIndex = 9999;
@@ -1171,46 +1179,76 @@ function createRankingUI() {
   document.body.appendChild(div);
 }
 
-/* ------------------------
-  ランキング描画
------------------------- */
-function renderRanking(data) {
+function renderRanking(data){
+  if(data.length===0) return;
   const box = document.getElementById("rankingBox");
-  if(!box) return;
+  const type = slideTypes[currentSlide % slideTypes.length];
 
-  let html = "<div style='font-weight:bold;margin-bottom:6px;'>💰 売上TOP5</div>";
+  // ソート
+  let sorted = [];
+  switch(type){
+    case "売上": sorted = data.sort((a,b)=>b.totalAmount - a.totalAmount); break;
+    case "平均単価": sorted = data.sort((a,b)=>b.avgAmount - a.avgAmount); break;
+    case "件数": sorted = data.sort((a,b)=>b.count - a.count); break;
+    case "高単価": sorted = data.sort((a,b)=>b.maxAmount - a.maxAmount); break;
+  }
 
-  data.forEach((d,i) => {
-    const isMe = String(d.id) === String(MY_ID);
-    html += `<div style="display:flex;justify-content:space-between; padding:3px 0;
-      background:${isMe ? "rgba(255,215,0,0.2)" : "transparent"};
+  const top5 = sorted.slice(0,5);
+  let html = `<div style="font-weight:bold;margin-bottom:6px;">${type}ランキングTOP5</div>`;
+
+  top5.forEach((d,i)=>{
+    const isMe = String(d.driverId) === String(MY_ID);
+    let value = 0;
+    switch(type){
+      case "売上": value = d.totalAmount; break;
+      case "平均単価": value = d.avgAmount; break;
+      case "件数": value = d.count; break;
+      case "高単価": value = d.maxAmount; break;
+    }
+    html += `<div style="display:flex;justify-content:space-between;padding:3px 0;
+      background:${isMe?"rgba(255,215,0,0.2)":"transparent"};
       font-weight:${i===0?"bold":"normal"};">
-      <span>${i+1}. ${d.name}</span>
-      <span>¥${d.sales}</span>
+      <span>${i+1}. ${d.userName}</span>
+      <span>${value}${type==="件数"?"件":"円"}</span>
       ${isMe?" ←自分":""}
     </div>`;
   });
 
+  // 更新時間表示
+  if(lastUpdate){
+    const h = String(lastUpdate.getHours()).padStart(2,'0');
+    const m = String(lastUpdate.getMinutes()).padStart(2,'0');
+    html += `<div style="margin-top:6px;font-size:11px;color:#ccc;">更新: ${h}:${m}</div>`;
+  }
+
   box.innerHTML = html;
+  currentSlide++;
 }
 
-/* ------------------------
-  起動関数
------------------------- */
-async function startRanking() {
+// 15分ごとのデータ更新＋スライド表示
+async function startRanking(){
   createRankingUI();
-
   let data = await loadRankingData();
   renderRanking(data);
 
-  // 30分ごとにデータ更新
-  setInterval(async () => {
-    data = await loadRankingData();
-    renderRanking(data);
-  }, 1800000); // 30分 = 1800000ms
+  // スライド切替 5秒ごと
+  setInterval(()=>renderRanking(data), slideInterval);
+
+  // 15分ごとにデータ更新（昼12時で更新）
+  setInterval(async ()=>{
+    const now = new Date();
+    if(now.getHours()>=12 && now.getDate()===lastUpdate?.getDate()){
+      // 昼12時以降でまだ更新していなければ
+      data = await loadRankingData();
+      currentSlide = 0;
+      renderRanking(data);
+    } else {
+      // 通常15分ごと
+      data = await loadRankingData();
+    }
+  }, 15*60*1000);
 }
 
-// ページロード時に起動
 startRanking();
 </script>
     
