@@ -1162,11 +1162,12 @@ async function loadRankingData() {
 }
 
 function renderRanking(data){
-  const box = document.getElementById("ranking-list"); // 元のボックスを流用
+  const box = document.getElementById("ranking-list");
   if(!box || data.length===0) return;
 
   const type = slideTypes[currentSlide % slideTypes.length];
 
+  // ソート
   let sorted = [];
   switch(type){
     case "売上": sorted = data.sort((a,b)=>b.totalAmount - a.totalAmount); break;
@@ -1177,7 +1178,11 @@ function renderRanking(data){
 
   const top5 = sorted.slice(0,5);
 
-  let html = "";
+  // タイトルに何のランキングかを明示
+  let html = `<div style="font-weight:bold;margin-bottom:6px; color:#FFD700;">
+      <i class="fas fa-trophy mr-1"></i>${type}ランキングTOP5
+    </div>`;
+
   top5.forEach((d,i)=>{
     const isMe = String(d.driverId) === String(MY_ID);
     let value = 0;
@@ -1187,6 +1192,7 @@ function renderRanking(data){
       case "件数": value = d.count; break;
       case "高単価": value = d.maxAmount; break;
     }
+
     html += `<div style="display:flex;justify-content:space-between;padding:2px 0;
       background:${isMe?"rgba(255,215,0,0.2)":"transparent"};
       font-weight:${i===0?"bold":"normal"};">
@@ -1196,10 +1202,11 @@ function renderRanking(data){
     </div>`;
   });
 
+  // 更新時間の色を濃くして見やすく
   if(lastUpdate){
     const h = String(lastUpdate.getHours()).padStart(2,'0');
     const m = String(lastUpdate.getMinutes()).padStart(2,'0');
-    html += `<div style="margin-top:4px;font-size:9px;color:#ccc;">
+    html += `<div style="margin-top:4px;font-size:10px;color:#ffffff;">
       更新: ${h}:${m} （自動更新: 毎時00分と30分）
     </div>`;
   }
