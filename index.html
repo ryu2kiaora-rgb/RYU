@@ -725,6 +725,7 @@ logId:editingLogId
 
         document.getElementById('btn-ride-on').onclick = () => {
             isDriving = true; rideStartTimestamp = Date.now();
+            localStorage.setItem("rideStart", rideStartTimestamp);
             startPos = { lat: currentLat, lng: currentLng };
             document.getElementById('active-timer-container').classList.remove('invisible');
             document.getElementById('btn-ride-on').classList.add('hidden');
@@ -759,7 +760,7 @@ logId:editingLogId
             const data = { 
                 amount, dateStr: getBusinessDate(now), 
                 timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-                pickupTime: rideStartTimestamp,
+                pickupTime: Number(localStorage.getItem("rideStart")),
                 dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
                 userName: userName,
                 lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
@@ -770,6 +771,8 @@ logId:editingLogId
             if (path) {
                 const docRef = await db.collection(path).add(data);
                 sendToGAS(data,docRef.id)
+                localStorage.removeItem("rideStart");
+rideStartTimestamp = null;
                 refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
