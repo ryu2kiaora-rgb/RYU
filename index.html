@@ -949,7 +949,19 @@ function getBusinessTimestamp(log){
         function showDailyDetail(ds) {
             const logs = salesLogs
   .filter(l => l.dateStr === ds)
-  .sort((a,b) => getBusinessTimestamp(b) - getBusinessTimestamp(a));
+  .sort((a, b) => {
+            // 営業時間を考慮した比較用の数値を作る関数
+            const getSortValue = (timeStr) => {
+                const [h, m] = timeStr.split(':').map(Number);
+                // 深夜（0時〜11時59分）なら24時間を足して「24時以降」として扱う
+                const adjustedHour = (h < 12) ? h + 24 : h;
+                return adjustedHour * 60 + m;
+            };
+            // b - a で降順（新しい順：深夜2時 > 23時 > 12時）
+            return getSortValue(b.timeStr) - getSortValue(a.sortValue || a.timeStr); 
+            // ※a.timeStrを使って計算するように修正
+            return getSortValue(b.timeStr) - getSortValue(a.timeStr);
+        });
             const container = document.getElementById('ride-logs'); if (!container) return;
             document.getElementById('footer-daily-total').innerText =
   `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
