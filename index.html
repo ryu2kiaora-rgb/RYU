@@ -665,6 +665,21 @@ document.addEventListener("visibilitychange", () => {
                     endLat: ePos.lat, endLng: ePos.lng,
                     lat: sPos.lat, lng: sPos.lng
                 });
+// 🔥 元ログの日付を使ってミリ秒生成（安全版）
+const log = salesLogs.find(l => l.id === editingLogId);
+
+const baseDate = new Date(log.dateStr);
+const [h, m] = time.split(":").map(Number);
+
+const pickupTimeMs = new Date(
+  baseDate.getFullYear(),
+  baseDate.getMonth(),
+  baseDate.getDate(),
+  h,
+  m
+).getTime();
+
+                
                 // 🔥 GASにも更新を送る
 await fetch(GAS_URL, {
   method: "POST",
@@ -675,7 +690,7 @@ await fetch(GAS_URL, {
     pickupLng: sPos.lng,
     dropLat: ePos.lat,
     dropLng: ePos.lng,
-    pickupTime: time,
+    pickupTime: pickupTimeMs,
     amount: amount
   })
 });
