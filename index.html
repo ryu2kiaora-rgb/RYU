@@ -394,110 +394,121 @@ function sendToGAS(data, logId){
 
 
 // ===== Firebase節約モード（改良版） =====
-async function syncStatusToFirestore(force = false) {
+async function syncStatusToFirestore(force=false){
 
-    if (!user || currentLat === null || currentLng === null) return;
+if(!user || currentLat===null || currentLng===null) return
 
-    // 前回位置との差
-    if (!force && lastLat !== null && lastLng !== null) {
+if(!force && lastLat!==null && lastLng!==null){
 
-        const distance = calcDistance(
-            lastLat,
-            lastLng,
-            currentLat,
-            currentLng
-        );
+const distance = calcDistance(
+lastLat,
+lastLng,
+currentLat,
+currentLng
+)
 
-        // 30m未満は送信しない（80m→改善）
-        if (distance < 30) return;
-    }
+if(distance < 80) return
+}
 
-    const todayStr = getBusinessDate(new Date());
+const todayStr = getBusinessDate(new Date())
 
-    const todayTotal = salesLogs
-        .filter(l => l.dateStr === todayStr)
-        .reduce((s, l) => s + l.amount, 0);
+const todayTotal = salesLogs
+.filter(l=>l.dateStr===todayStr)
+.reduce((s,l)=>s+l.amount,0)
 
-    try {
+const grid =
+Math.floor(currentLat*100)+"_"+Math.floor(currentLng*100)
 
-        await db
-            .doc(`${getPublicPath('drivers')}/${user.uid}`)
-            .set({
-                name: userName,
-                lat: currentLat,
-                lng: currentLng,
-                status: isDriving ? "occupied" : "on",
-                todaySales: todayTotal,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+try{
 
-        lastLat = currentLat;
-        lastLng = currentLng;
+await db
+.doc(`${getPublicPath('drivers')}/${user.uid}`)
+.set({
 
-    } catch (e) {
-        console.log("sync error", e);
-    }
+name:userName,
+lat:currentLat,
+lng:currentLng,
+grid:grid,
+status:isDriving?"occupied":"on",
+todaySales:todayTotal,
+updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+
+},{merge:true})
+
+lastLat=currentLat
+lastLng=currentLng
+
+}catch(e){
+
+console.log("sync error",e)
+
+}
+
 }
 // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
-function startGPS() {
+function startGPS(){
 
-    if (!navigator.geolocation) return;
+if(!navigator.geolocation) return
 
-    // watchPositionはUI（マップの自車位置）の更新にのみ使用
-    watchId = navigator.geolocation.watchPosition((pos) => {
+watchId = navigator.geolocation.watchPosition((pos)=>{
 
-        // GPS精度が悪い場合は無視（iPhone対策）
-        if (pos.coords.accuracy > 120) return;
+if(pos.coords.accuracy>120) return
 
-        const { latitude: lat, longitude: lng } = pos.coords;
+const lat = pos.coords.latitude
+const lng = pos.coords.longitude
 
-        currentLat = lat;
-        currentLng = lng;
+currentLat=lat
+currentLng=lng
 
-        if (!map) return;
+if(!map) return
 
-        if (!userMarker) {
+if(!userMarker){
 
-            userMarker = L.marker([lat, lng], { 
-                icon: L.divIcon({
-                    html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'),
-                    className: '',
-                    iconSize:[0,0]
-                }) 
-            }).addTo(map);
+userMarker=L.marker([lat,lng],{
+icon:L.divIcon({
+html:createMarkerHtml(userName,isDriving?'occupied':'on'),
+className:'',
+iconSize:[0,0]
+})
+}).addTo(map)
 
-            map.setView([lat, lng], 16);
+map.setView([lat,lng],16)
 
-            syncStatusToFirestore(true); // 初回は強制
+syncStatusToFirestore(true)
 
-        } else {
+}else{
 
-            userMarker.setLatLng([lat, lng]);
+userMarker.setLatLng([lat,lng])
 
-        }
+}
 
-    }, (err) => {
+},(err)=>{
 
-        console.log("GPS error", err);
+console.log("GPS error",err)
 
-    }, {
+},{
+enableHighAccuracy:true,
+maximumAge:15000,
+timeout:20000
+})
 
-        enableHighAccuracy: true,
-        maximumAge: 0,
-        timeout: 20000
+startSyncInterval()
 
-    });
+}
 
     // 書き込みを60秒ごとに制限
-    function startSyncInterval() {
+function startSyncInterval(){
 
-    if (syncInterval) clearInterval(syncInterval);
+if(syncInterval) clearInterval(syncInterval)
 
-    const interval = isDriving ? 15000 : 60000;
+const interval = isDriving ? 20000 : 60000
 
-    syncInterval = setInterval(() => {
-        syncStatusToFirestore();
-    }, interval);
+syncInterval=setInterval(()=>{
+
+syncStatusToFirestore()
+
+},interval)
+
 }
 }
 
@@ -521,47 +532,84 @@ document.addEventListener("visibilitychange", () => {
 });
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
-        function listenToDrivers() {
-    setInterval(async () => {
-        const snap = await db.collection(getPublicPath('drivers')).get();
+ function listenToDrivers(){
 
-        const now = new Date();
-        let count = 0;
+setInterval(async()=>{
 
-        snap.forEach(doc => {
-            const d = doc.data();
-            if (d.lat === undefined || d.lng === undefined) return;
+if(currentLat===null || currentLng===null) return
 
-            const age = now - (d.updatedAt?.toDate() || now);
+const grid =
+Math.floor(currentLat*100)+"_"+Math.floor(currentLng*100)
 
-            if (age < 3600000) {
-                count++;
+try{
 
-                if (user && doc.id !== user.uid && map) {
-                    const icon = L.divIcon({
-                        html: createMarkerHtml(d.name, d.status),
-                        className: '',
-                        iconSize:[0,0]
-                    });
+const snap = await db
+.collection(getPublicPath('drivers'))
+.where("grid","==",grid)
+.get()
 
-                    if (otherMarkers[doc.id]) {
-                        otherMarkers[doc.id]
-                          .setLatLng([d.lat, d.lng])
-                          .setIcon(icon);
-                    } else {
-                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
-                    }
-                }
+const now=new Date()
+let count=0
 
-            } else if (otherMarkers[doc.id]) {
-                map.removeLayer(otherMarkers[doc.id]);
-                delete otherMarkers[doc.id];
-            }
-        });
+snap.forEach(doc=>{
 
-        document.getElementById('online-count').innerText = count;
+const d=doc.data()
 
-    }, 30000); // ←30秒
+if(d.lat===undefined || d.lng===undefined) return
+
+const age = now-(d.updatedAt?.toDate()||now)
+
+if(age<600000){
+
+count++
+
+if(user && doc.id!==user.uid && map){
+
+const icon=L.divIcon({
+html:createMarkerHtml(d.name,d.status),
+className:'',
+iconSize:[0,0]
+})
+
+if(otherMarkers[doc.id]){
+
+otherMarkers[doc.id]
+.setLatLng([d.lat,d.lng])
+.setIcon(icon)
+
+}else{
+
+otherMarkers[doc.id]=
+L.marker([d.lat,d.lng],{icon})
+.addTo(map)
+
+}
+
+}
+
+}else{
+
+if(otherMarkers[doc.id]){
+
+map.removeLayer(otherMarkers[doc.id])
+delete otherMarkers[doc.id]
+
+}
+
+}
+
+})
+
+document.getElementById('online-count').innerText=count
+
+}catch(e){
+
+console.log("driver read error",e)
+
+}
+
+},60000)
+
 }
 
         // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
