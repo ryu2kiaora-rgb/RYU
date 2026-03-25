@@ -1,1 +1,1076 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ライドシェア売上管理 Pro</title>
+
+<link rel="manifest" href="manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js')
+      .then(() => console.log('Service Worker registered'))
+      .catch(err => console.log('Service Worker registration failed:', err));
+  }
+</script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #e5e7eb;
+            border: 1px solid #e5e7eb;
+        }
+        .calendar-day {
+            min-height: 95px;
+            background-color: white;
+            padding: 4px;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .calendar-day:hover { background-color: #f9fafb; }
+        .calendar-day.today { background-color: #fffbeb; border: 2px solid #fbbf24 !important; }
+        .day-num { font-size: 0.75rem; color: #6b7280; margin-bottom: 2px; }
+        .day-sales { font-size: 0.7rem; font-weight: bold; color: #10b981; text-align: center; }
+        .day-count { font-size: 0.6rem; color: #6b7280; text-align: center; }
+        .day-hours { font-size: 0.55rem; color: #9ca3af; text-align: center; margin-top: auto; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .modal-enter { animation: slideUp 0.3s ease-out; }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.5rem center;
+            background-size: 1em;
+        }
+
+        #report-container { background-color: white; width: 100%; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-900 pb-24 font-sans">
+
+<!-- ===== タイトルアニメーション画面 ===== -->
+<div id="title-screen" class="fixed inset-0 bg-slate-900 flex flex-col items-center justify-center z-50 overflow-hidden">
+  <!-- 粒子エフェクト用キャンバス -->
+  <canvas id="title-canvas" class="absolute inset-0 w-full h-full"></canvas>
+
+  <!-- タイトル文字 -->
+  <h1 id="title-text" class="relative text-4xl sm:text-5xl font-black text-white flex gap-2 z-10">
+    <span class="title-letter">R</span>
+    <span class="title-letter">S</span>
+    <span class="title-letter">売</span>
+    <span class="title-letter">上</span>
+    <span class="title-letter">管</span>
+    <span class="title-letter">理</span>
+    <span class="title-letter">P</span>
+    <span class="title-letter">r</span>
+    <span class="title-letter">o</span>
+  </h1>
+</div>
+
+<style>
+/* --- タイトル文字アニメ --- */
+.title-letter {
+  opacity: 0;
+  transform: translateY(30px);
+  display: inline-block;
+}
+
+.title-letter.animate {
+  animation: fadeUp 0.6s forwards;
+}
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* 粒子 */
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+</style>
+
+<script>
+/* ===== 文字アニメーション ===== */
+window.addEventListener('load', () => {
+  const letters = document.querySelectorAll('#title-text .title-letter');
+  letters.forEach((el, i) => {
+    setTimeout(() => {
+      el.classList.add('animate');
+    }, i * 100);
+  });
+
+  // 文字が全て出た後にフェードアウト
+  setTimeout(() => {
+    const screen = document.getElementById('title-screen');
+    screen.classList.add('transition-opacity', 'duration-700', 'opacity-0');
+    setTimeout(() => screen.remove(), 700);
+  }, letters.length * 100 + 2500);
+
+  // 粒子エフェクト開始
+  initParticles();
+});
+
+/* ===== 粒子エフェクト ===== */
+function initParticles() {
+  const canvas = document.getElementById('title-canvas');
+  const ctx = canvas.getContext('2d');
+  let width = canvas.width = window.innerWidth;
+  let height = canvas.height = window.innerHeight;
+
+  const particles = [];
+  const particleCount = 80;
+
+  for (let i = 0; i < particleCount; i++) {
+    particles.push({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      r: Math.random() * 2 + 1,
+      vx: (Math.random() - 0.5) * 0.5,
+      vy: (Math.random() - 0.5) * 0.5,
+      alpha: Math.random() * 0.5 + 0.5
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+      ctx.fill();
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // 画面外に出たら反対側に戻す
+      if (p.x > width) p.x = 0;
+      if (p.x < 0) p.x = width;
+      if (p.y > height) p.y = 0;
+      if (p.y < 0) p.y = height;
+    });
+    requestAnimationFrame(draw);
+  }
+
+  draw();
+
+  window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  });
+}
+</script>
+
+
+    <!-- Header -->
+    <header id="main-header" class="bg-slate-900 text-white p-4 shadow-md sticky top-0 z-10 no-print">
+        <div class="flex justify-between items-center max-w-2xl mx-auto">
+            <h1 class="text-lg font-bold flex items-center gap-2">
+                <i data-lucide="car" class="w-5 h-5"></i> ライドシェア売上管理Pro
+            </h1>
+            <button onclick="toggleSettings()" class="p-2 hover:bg-slate-800 rounded-full">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+<button id="installBtn"
+style="
+position:fixed;
+bottom:20px;
+right:20px;
+background:#0f172a;
+color:white;
+padding:12px 18px;
+border-radius:10px;
+font-weight:bold;
+display:none;
+z-index:9999;
+">
+📲 アプリをインストール
+</button>
+
+    <main class="max-w-2xl mx-auto p-4" id="main-container">
+
+        <!-- Settings Section -->
+        <section id="settings-section" class="hidden mb-6 bg-white p-4 rounded-xl shadow-sm border border-gray-200 no-print">
+            <h2 class="font-bold mb-3 flex items-center gap-2 text-sm"><i data-lucide="tool" class="w-4 h-4"></i> 分析設定・データ移行</h2>
+            <div class="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold">ガソリン単価 (円/L)</label>
+                    <input type="number" id="gas-price" value="170" class="w-full border rounded p-2 text-sm" onchange="updateCalculations()">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold">燃費 (km/L)</label>
+                    <input type="number" id="fuel-efficiency" value="15" class="w-full border rounded p-2 text-sm" onchange="updateCalculations()">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold">給与歩合 (税込売上の何％)</label>
+                    <input type="number" id="salary-percentage" value="50" class="w-full border rounded p-2 text-sm" onchange="updateCalculations()">
+                </div>
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold text-orange-600">給料締め日</label>
+                    <select id="closing-day" class="w-full border rounded p-2 text-sm" onchange="updateCalculations()">
+                        <option value="5">5日</option><option value="10">10日</option><option value="15">15日</option>
+                        <option value="20">20日</option><option value="25">25日</option><option value="31" selected>末日</option>
+                    </select>
+                </div>
+            </div>
+            <div class="border-t pt-4 grid grid-cols-2 gap-2">
+                <button onclick="exportBackup()" class="flex items-center justify-center gap-1 text-[10px] font-bold py-2 bg-gray-100 rounded text-gray-600 hover:bg-gray-200">
+                    <i data-lucide="download" class="w-3 h-3"></i> 保存
+                </button>
+                <button onclick="triggerImport()" class="flex items-center justify-center gap-1 text-[10px] font-bold py-2 bg-blue-50 rounded text-blue-600 hover:bg-blue-100">
+                    <i data-lucide="upload" class="w-3 h-3"></i> 読み込み
+                </button>
+                <input type="file" id="import-file" class="hidden" accept=".json" onchange="handleImport(event)">
+            </div>
+        </section>
+
+        <!-- Summary Cards -->
+        <div id="summary-cards" class="no-print">
+            <div id="period-label" class="text-[10px] font-bold text-gray-400 mb-1 px-1 uppercase tracking-wider">集計期間: --</div>
+            <div class="grid grid-cols-2 gap-2 mb-6 text-center">
+                <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                    <p class="text-[9px] text-gray-400 font-bold uppercase">期間内 総売上</p>
+                    <p id="month-total" class="text-lg font-black text-slate-800">¥0</p>
+                </div>
+                <div class="bg-amber-500 p-3 rounded-xl shadow-md">
+                    <p class="text-[9px] text-amber-100 font-bold uppercase">高速立替合計</p>
+                    <p id="month-express" class="text-lg font-black text-white">¥0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div id="tab-calendar" class="tab-content active space-y-4 no-print">
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
+                <div class="flex justify-between items-center p-4 bg-gray-50 border-b">
+                    <button onclick="changeMonth(-1)" class="p-1 hover:bg-gray-200 rounded"><i data-lucide="chevron-left"></i></button>
+                    <h3 id="calendar-title" class="font-bold text-gray-700">----年 --月</h3>
+                    <button onclick="changeMonth(1)" class="p-1 hover:bg-gray-200 rounded"><i data-lucide="chevron-right"></i></button>
+                </div>
+                <div class="grid grid-cols-7 text-center text-[10px] font-bold text-gray-400 py-2 bg-gray-50 border-b border-gray-100">
+                    <div>日</div><div>月</div><div>火</div><div>水</div><div>木</div><div>金</div><div>土</div>
+                </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+        </div>
+
+        <div id="tab-history" class="tab-content space-y-4">
+            <div id="report-capture-area" class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="p-4 border-b bg-gray-50 flex justify-between items-center no-print">
+                    <h2 class="font-bold">稼働詳細</h2>
+                    <div class="flex gap-2">
+                        <button id="save-image-btn" onclick="captureReport()" class="hidden bg-slate-800 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 active:scale-95 transition-transform">
+                            <i data-lucide="image" class="w-3.5 h-3.5"></i> 画像として保存
+                        </button>
+                        <button onclick="toggleReportMode()" id="report-mode-btn" class="bg-blue-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 active:scale-95 transition-transform">
+                            <i data-lucide="file-check" class="w-3.5 h-3.5"></i> 提出用レポート表示
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="report-header" class="hidden p-8 bg-white border-b-2 border-slate-100">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <h1 class="text-2xl font-black text-slate-900 tracking-tight">稼働実績報告書</h1>
+                            <p id="report-period-text" class="text-sm text-slate-500 font-bold mt-1">集計期間: ----/--/-- 〜 ----/--/--</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2 mb-8 text-center">
+                        <div class="border p-2 rounded bg-orange-50/50">
+                            <p class="text-[8px] text-orange-600 font-bold">GO</p>
+                            <p id="rep-go-val" class="text-[10px] font-bold">¥0</p>
+                            <p id="rep-go-cnt" class="text-[8px] text-gray-400">0件</p>
+                        </div>
+                        <div class="border p-2 rounded bg-slate-50">
+                            <p class="text-[8px] text-slate-600 font-bold">Uber</p>
+                            <p id="rep-uber-val" class="text-[10px] font-bold">¥0</p>
+                            <p id="rep-uber-cnt" class="text-[8px] text-gray-400">0件</p>
+                        </div>
+                        <div class="border p-2 rounded bg-blue-50/50">
+                            <p class="text-[8px] text-blue-600 font-bold">DiDi</p>
+                            <p id="rep-didi-val" class="text-[10px] font-bold">¥0</p>
+                            <p id="rep-didi-cnt" class="text-[8px] text-gray-400">0件</p>
+                        </div>
+                        <div class="border p-2 rounded">
+                            <p class="text-[8px] text-gray-600 font-bold">他</p>
+                            <p id="rep-other-val" class="text-[10px] font-bold">¥0</p>
+                            <p id="rep-other-cnt" class="text-[8px] text-gray-400">0件</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4 p-4 bg-slate-900 text-white rounded-xl mb-4 text-center">
+                        <div>
+                            <p class="text-[8px] text-slate-400 font-bold uppercase mb-1">売上総額</p>
+                            <p id="rep-total-sales" class="text-lg font-black">¥0</p>
+                        </div>
+                        <div>
+                            <p class="text-[8px] text-slate-400 font-bold uppercase mb-1">高速合計</p>
+                            <p id="rep-total-express" class="text-lg font-black text-amber-400">¥0</p>
+                        </div>
+                        <div>
+                            <p class="text-[8px] text-slate-400 font-bold uppercase mb-1">稼働日数</p>
+                            <p id="rep-total-days" class="text-lg font-black text-blue-400">0日</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-[9px] uppercase text-gray-500 border-b">
+                            <tr>
+                                <th class="p-3">日付</th>
+                                <th class="p-3 text-right">売上(総額)</th>
+                                <th class="p-3 text-right no-report">時給・GAS代</th>
+                                <th class="p-3 text-right">高速/件数</th>
+                                <th id="th-platform-report" class="p-3 text-right hidden">内訳</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <div id="report-footer" class="hidden p-4 text-center text-[10px] text-gray-400 border-t bg-gray-50">Generated by RideShare Management Pro</div>
+            </div>
+        </div>
+
+        <div id="tab-analysis" class="tab-content space-y-4 no-print">
+            <div class="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center">
+                <button onclick="changeMonth(-1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-500"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                <div class="text-center"><span id="analysis-month-label" class="text-sm font-bold text-slate-700">----年 --月</span></div>
+                <button onclick="changeMonth(1)" class="p-2 hover:bg-gray-100 rounded-lg text-gray-500"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h2 class="font-bold mb-4">売上バランス</h2>
+                <div class="h-48 flex justify-center"><canvas id="salesChart"></canvas></div>
+            </div>
+            <div id="perf-summary" class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4 text-sm"></div>
+        </div>
+
+    </main>
+
+    <!-- Navigation -->
+    <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-3 flex justify-around items-center z-20 no-print shadow-lg">
+        <button onclick="switchTab('calendar')" class="flex flex-col items-center gap-1 text-blue-600 nav-btn" data-tab="calendar">
+            <i data-lucide="calendar" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold">カレンダー</span>
+        </button>
+        <button onclick="switchTab('history')" class="flex flex-col items-center gap-1 text-gray-400 nav-btn" data-tab="history">
+            <i data-lucide="list" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold">履歴</span>
+        </button>
+        <button onclick="switchTab('analysis')" class="flex flex-col items-center gap-1 text-gray-400 nav-btn" data-tab="analysis">
+            <i data-lucide="trending-up" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold">分析</span>
+        </button>
+    </nav>
+
+    <!-- Input Modal -->
+    <div id="input-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-end sm:items-center justify-center p-0 sm:p-4 no-print">
+        <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl overflow-hidden modal-enter shadow-2xl">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 id="modal-date-label" class="font-black text-slate-800 text-lg">----/--/--</h3>
+                <button onclick="closeModal()" class="p-2 bg-gray-200 rounded-full"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-2 gap-4">
+                    <div><label class="block text-[10px] font-bold text-gray-500 mb-1">出庫</label><select id="start-time" class="w-full bg-white border rounded p-2 font-bold" onchange="previewPerf()"></select></div>
+                    <div><label class="block text-[10px] font-bold text-gray-500 mb-1">帰庫</label><select id="end-time" class="w-full bg-white border rounded p-2 font-bold" onchange="previewPerf()"></select></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                        <label class="block text-[10px] font-bold text-orange-600 mb-1">GO</label>
+                        <div class="flex gap-1"><input type="number" id="s-go" class="w-full bg-transparent font-bold" placeholder="¥" oninput="previewPerf()"><input type="number" id="c-go" class="w-12 bg-white/50 text-center text-xs" placeholder="件" oninput="previewPerf()"></div>
+                    </div>
+                    <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 text-white">
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Uber</label>
+                        <div class="flex gap-1"><input type="number" id="s-uber" class="w-full bg-transparent font-bold text-white" placeholder="¥" oninput="previewPerf()"><input type="number" id="c-uber" class="w-12 bg-slate-700 text-center text-xs text-white" placeholder="件" oninput="previewPerf()"></div>
+                    </div>
+                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <label class="block text-[10px] font-bold text-blue-600 mb-1">DiDi</label>
+                        <div class="flex gap-1"><input type="number" id="s-didi" class="w-full bg-transparent font-bold" placeholder="¥" oninput="previewPerf()"><input type="number" id="c-didi" class="w-12 bg-white/50 text-center text-xs" placeholder="件" oninput="previewPerf()"></div>
+                    </div>
+                    <div class="bg-gray-100 p-3 rounded-lg border border-gray-200">
+                        <label class="block text-[10px] font-bold text-gray-500 mb-1">他</label>
+                        <div class="flex gap-1"><input type="number" id="s-other" class="w-full bg-transparent font-bold" placeholder="¥" oninput="previewPerf()"><input type="number" id="c-other" class="w-12 bg-white text-center text-xs" placeholder="件" oninput="previewPerf()"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                        <label class="block text-[10px] font-bold text-amber-700 mb-1">高速立替 (円)</label>
+                        <input type="number" id="exp-fee" class="w-full bg-transparent font-bold" placeholder="0">
+                    </div>
+                    <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                        <label class="block text-[10px] font-bold text-green-700 mb-1">走行距離 (km)</label>
+                        <input type="number" id="mile-dist" class="w-full bg-transparent font-bold" placeholder="0" oninput="previewPerf()">
+                    </div>
+                </div>
+                <div id="modal-analysis-footer" class="bg-slate-900 text-white p-4 rounded-xl text-[10px] hidden">
+                    <div class="flex justify-between"><span>稼働: <span id="m-hours">0.0</span>h</span><span>ガス代: <span id="m-gas">¥0</span></span></div>
+                    <div class="flex justify-between border-t border-slate-700 pt-1 mt-1"><span>時給: <span id="m-hourly">¥0</span></span><span>件単価: <span id="m-avg">¥0</span></span></div>
+                </div>
+                <div class="flex gap-2 pt-2 pb-6">
+                    <button onclick="saveData()" class="flex-1 bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg active:scale-95 transition-transform">保存</button>
+                    <button onclick="deleteRecord()" id="delete-btn" class="hidden bg-red-100 text-red-600 p-4 rounded-xl"><i data-lucide="trash-2"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/50 z-[100] hidden flex flex-col items-center justify-center text-white">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent mb-4"></div>
+        <p class="font-bold">画像を生成中...</p>
+    </div>
+
+    <script>
+        /** --- STATE --- **/
+        let currentDate = new Date();
+        let selectedDateStr = "";
+        let records = {}; 
+        let settings = { gasPrice: 170, fuelEfficiency: 15, closingDay: 31, salaryPercentage: 50 };
+        let salesChart = null;
+        let isReportMode = false;
+
+        window.onload = () => {
+            initTimeSelects();
+            loadSettings(); 
+            loadRecords();  
+            renderApp();
+            lucide.createIcons();
+        };
+
+        function initTimeSelects() {
+            const selects = [document.getElementById('start-time'), document.getElementById('end-time')];
+            selects.forEach(s => {
+                if (!s) return;
+                let html = '<option value="">--:--</option>';
+                for (let h=0; h<24; h++) {
+                    for (let m of ['00', '30']) {
+                        const v = `${String(h).padStart(2,'0')}:${m}`;
+                        html += `<option value="${v}">${v}</option>`;
+                    }
+                }
+                s.innerHTML = html;
+            });
+        }
+
+        /** --- PERIOD LOGIC --- **/
+        function getPeriodRange(baseDate, closingDay) {
+            let start, end;
+            const y = baseDate.getFullYear(), m = baseDate.getMonth();
+            
+            if (closingDay >= 31) {
+                start = new Date(y, m, 1, 0, 0, 0);
+                end = new Date(y, m + 1, 0, 23, 59, 59);
+            } else {
+                // カレンダーの表示月が3月の場合、締め日が20日なら 2/21 〜 3/20
+                end = new Date(y, m, closingDay, 23, 59, 59);
+                start = new Date(y, m - 1, closingDay + 1, 0, 0, 0);
+                
+                // もしbaseDate（今日や表示月）が現在の締め日より後の場合は、翌月の範囲を表示するべきか判定
+                // ※ ここではシンプルに「その月がターゲットとなる締め期間」を計算
+                if (baseDate.getDate() > closingDay && baseDate.getTime() === new Date().setHours(0,0,0,0)) {
+                    // 今日が21日以降なら、3/21〜4/20を表示
+                    start = new Date(y, m, closingDay + 1, 0, 0, 0);
+                    end = new Date(y, m + 1, closingDay, 23, 59, 59);
+                }
+            }
+            return { start, end };
+        }
+
+        /** --- RENDER --- **/
+        function renderApp() {
+            // カレンダーで表示している月（currentDate）をベースに集計期間を計算
+            const range = getPeriodRange(currentDate, settings.closingDay);
+            
+            const periodStr = `${formatDateDisplay(range.start)} 〜 ${formatDateDisplay(range.end)}`;
+            document.getElementById('period-label').innerText = `集計期間: ${periodStr}`;
+            
+            const labelText = `${currentDate.getFullYear()}年 ${currentDate.getMonth() + 1}月`;
+            document.getElementById('calendar-title').innerText = labelText;
+            document.getElementById('analysis-month-label').innerText = labelText;
+            
+            renderCalendar();
+            renderHistoryList(range);
+            updateSummaries(range);
+            updateAnalysis(range);
+            lucide.createIcons();
+        }
+
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid');
+            if (!grid) return;
+            grid.innerHTML = '';
+            const y = currentDate.getFullYear(), m = currentDate.getMonth();
+            const first = new Date(y, m, 1).getDay();
+            const last = new Date(y, m + 1, 0).getDate();
+            const todayStr = formatDate(new Date());
+
+            for (let i=0; i<first; i++) grid.appendChild(Object.assign(document.createElement('div'), {className:"bg-gray-50 border-r border-b border-gray-100"}));
+            for (let d=1; d<=last; d++) {
+                const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const r = records[ds];
+                const el = document.createElement('div');
+                el.className = `calendar-day border-r border-b border-gray-100 ${ds === todayStr ? 'today' : ''}`;
+                let h = `<span class="day-num">${d}</span>`;
+                if (r) {
+                    const total = (r.sGo||0) + (r.sUber||0) + (r.sDidi||0) + (r.sOther||0);
+                    if (total > 0) h += `<span class="day-sales text-blue-600">¥${Math.floor(total/1000)}k</span>`;
+                    const cnt = (r.cGo||0) + (r.cUber||0) + (r.cDidi||0) + (r.cOther||0);
+                    if (cnt > 0) h += `<span class="day-count">${cnt}件</span>`;
+                }
+                el.innerHTML = h;
+                el.onclick = () => openModal(ds);
+                grid.appendChild(el);
+            }
+        }
+
+function renderHistoryList(range) {
+            const tbody = document.getElementById('history-list');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            
+            // 見出し（内訳）の表示切り替え
+            const thPlatform = document.getElementById('th-platform-report');
+            if (thPlatform) {
+                if (isReportMode) thPlatform.classList.remove('hidden');
+                else thPlatform.classList.add('hidden');
+            }
+
+            const sortedKeys = Object.keys(records).sort().reverse();
+            
+            if (isReportMode) {
+                document.getElementById('report-period-text').innerText = `報告対象期間: ${formatDateDisplay(range.start)} 〜 ${formatDateDisplay(range.end)}`;
+            }
+
+            sortedKeys.forEach(k => {
+                const d = new Date(k + "T00:00:00");
+                if (d < range.start || d > range.end) return;
+
+                const r = records[k];
+                const total = (r.sGo||0) + (r.sUber||0) + (r.sDidi||0) + (r.sOther||0);
+                const cnt = (r.cGo||0) + (r.cUber||0) + (r.cDidi||0) + (r.cOther||0);
+                const hours = calculateHours(r.startTime, r.endTime);
+                const gas = ((r.mileage || 0) / settings.fuelEfficiency) * settings.gasPrice;
+                
+                const tr = document.createElement('tr');
+                tr.className = isReportMode ? "text-[11px] border-b" : "hover:bg-gray-50 cursor-pointer text-xs";
+                if (!isReportMode) tr.onclick = () => openModal(k);
+
+                // 通常モード用（時給など）
+                let perfHtml = `<td class="p-3 text-right no-report">
+                    <div class="text-[10px] font-bold text-slate-800">¥${hours > 0 ? Math.round(total/hours).toLocaleString() : 0}/h</div>
+                    <div class="text-[9px] text-gray-400">¥${Math.round(gas).toLocaleString()}</div>
+                </td>`;
+
+                // 【修正】レポートモード用の内訳（件数と金額を表示）
+                let reportPlatformHtml = `<td class="p-3 text-right text-[9px] whitespace-nowrap leading-tight font-medium">
+                    <span class="text-orange-600">Go ${(r.cGo||0)}件 ¥${(r.sGo||0).toLocaleString()}</span><br>
+                    <span class="text-slate-800">Ub ${(r.cUber||0)}件 ¥${(r.sUber||0).toLocaleString()}</span><br>
+                    <span class="text-blue-600">Di ${(r.cDidi||0)}件 ¥${(r.sDidi||0).toLocaleString()}</span><br>
+                    <span class="text-gray-500">他 ${(r.cOther||0)}件 ¥${(r.sOther||0).toLocaleString()}</span>
+                </td>`;
+
+                tr.innerHTML = `
+                    <td class="p-3"><div class="font-bold">${k.substring(5).replace(/-/g,'/')}</div></td>
+                    <td class="p-3 text-right font-black">¥${total.toLocaleString()}</td>
+                    ${isReportMode ? '' : perfHtml}
+                    <td class="p-3 text-right">
+                        <div class="font-bold text-amber-600">¥${(r.express||0).toLocaleString()}</div>
+                        <div class="text-[9px] text-gray-500">${cnt}件</div>
+                    </td>
+                    ${isReportMode ? reportPlatformHtml : ''}
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateSummaries(range) {
+            let totals = { sGo:0, sUber:0, sDidi:0, sOther:0, exp:0, days:0, cGo:0, cUb:0, cDi:0, cOt:0 };
+            Object.keys(records).forEach(k => {
+                const d = new Date(k + "T00:00:00");
+                if (d >= range.start && d <= range.end) {
+                    const r = records[k];
+                    const dailyTotal = (r.sGo||0) + (r.sUber||0) + (r.sDidi||0) + (r.sOther||0);
+                    totals.sGo += r.sGo||0; totals.sUber += r.sUber||0; totals.sDidi += r.sDidi||0; totals.sOther += r.sOther||0;
+                    totals.exp += r.express||0;
+                    totals.cGo += r.cGo||0; totals.cUb += r.cUber||0; totals.cDi += r.cDidi||0; totals.cOt += r.cOther||0;
+                    if (dailyTotal > 0) totals.days++;
+                }
+            });
+            const totalSales = totals.sGo + totals.sUber + totals.sDidi + totals.sOther;
+            document.getElementById('month-total').innerText = `¥${totalSales.toLocaleString()}`;
+            document.getElementById('month-express').innerText = `¥${totals.exp.toLocaleString()}`;
+            
+            if (isReportMode) {
+                document.getElementById('rep-go-val').innerText = `¥${totals.sGo.toLocaleString()}`;
+                document.getElementById('rep-go-cnt').innerText = `${totals.cGo}件`;
+                document.getElementById('rep-uber-val').innerText = `¥${totals.sUber.toLocaleString()}`;
+                document.getElementById('rep-uber-cnt').innerText = `${totals.cUb}件`;
+                document.getElementById('rep-didi-val').innerText = `¥${totals.sDidi.toLocaleString()}`;
+                document.getElementById('rep-didi-cnt').innerText = `${totals.cDi}件`;
+                document.getElementById('rep-other-val').innerText = `¥${totals.sOther.toLocaleString()}`;
+                document.getElementById('rep-other-cnt').innerText = `${totals.cOt}件`;
+                document.getElementById('rep-total-sales').innerText = `¥${totalSales.toLocaleString()}`;
+                document.getElementById('rep-total-express').innerText = `¥${totals.exp.toLocaleString()}`;
+                document.getElementById('rep-total-days').innerText = `${totals.days}日`;
+            }
+        }
+
+function updateAnalysis(range) {
+
+let maxFare = 0;
+
+let stats = {
+total:0,
+go:0,
+uber:0,
+didi:0,
+other:0,
+hours:0,
+dist:0,
+count:0
+};
+
+let weekdayStats=[0,0,0,0,0,0,0];
+
+let shiftStats={
+day:0,
+night:0,
+late:0
+};
+
+Object.keys(records).forEach(k=>{
+
+const d=new Date(k+"T00:00:00");
+
+if(d>=range.start && d<=range.end){
+
+const r=records[k];
+
+const total=
+(r.sGo||0)+(r.sUber||0)+(r.sDidi||0)+(r.sOther||0);
+
+if(total > maxFare) maxFare = total;
+
+stats.go+=r.sGo||0;
+stats.uber+=r.sUber||0;
+stats.didi+=r.sDidi||0;
+stats.other+=r.sOther||0;
+
+stats.hours+=calculateHours(r.startTime,r.endTime);
+
+stats.dist+=r.mileage||0;
+
+stats.count+=(r.cGo||0)+(r.cUber||0)+(r.cDidi||0)+(r.cOther||0);
+
+weekdayStats[d.getDay()]+=total;
+
+if(r.startTime){
+
+const h=parseInt(r.startTime.split(":")[0]);
+
+if(h>=4 && h<13) shiftStats.day+=total;
+else if(h>=16 && h<24) shiftStats.night+=total;
+else shiftStats.late+=total;
+
+}
+
+}
+
+});
+
+stats.total=stats.go+stats.uber+stats.didi+stats.other;
+
+if(salesChart) salesChart.destroy();
+
+const cv=document.getElementById('salesChart');
+
+if(cv && stats.total>0){
+
+salesChart=new Chart(cv.getContext('2d'),{
+
+type:'doughnut',
+
+data:{
+labels:['GO','Uber','DiDi','他'],
+datasets:[{
+data:[stats.go,stats.uber,stats.didi,stats.other],
+backgroundColor:['#f97316','#1e293b','#3b82f6','#94a3b8'],
+borderWidth:2
+}]
+},
+
+options:{
+responsive:true,
+maintainAspectRatio:false,
+plugins:{
+legend:{
+position:'bottom',
+labels:{boxWidth:10,font:{size:10}}
+}
+}
+}
+
+});
+
+}
+
+const gas=((stats.dist||0)/settings.fuelEfficiency)*settings.gasPrice;
+
+const perfEl=document.getElementById('perf-summary');
+
+if(perfEl){
+
+const avgRide=stats.count>0?Math.round(stats.total/stats.count):0;
+
+const perKm=stats.dist>0?Math.round(stats.total/stats.dist):0;
+
+const wdNames=["日","月","火","水","木","金","土"];
+
+let weekdayHTML='<div class="mt-4"><p class="text-xs font-bold mb-2">曜日別売上集計</p><div class="grid grid-cols-7 gap-1">';
+
+for(let i=0;i<7;i++){
+
+weekdayHTML+=`
+<div class="bg-gray-50 h-12 flex flex-col justify-center items-center rounded">
+<p class="text-[9px]">${wdNames[i]}</p>
+<p class="text-[11px] font-bold">${formatK(weekdayStats[i])}</p>
+</div>
+`;
+
+}
+
+weekdayHTML+='</div></div>';
+
+const shiftHTML=`
+<div class="mt-4">
+
+<p class="text-xs font-bold mb-2">稼働時間帯別売上集計</p>
+
+<div class="grid grid-cols-3 gap-2">
+
+<div class="p-3 bg-yellow-50 rounded text-center">
+<p class="text-[10px] text-yellow-600">朝勤<br>4時以降START</p>
+<p class="font-bold">¥${shiftStats.day.toLocaleString()}</p>
+</div>
+
+<div class="p-3 bg-blue-50 rounded text-center">
+<p class="text-[10px] text-blue-600">夕･夜勤<br>16時以降START</p>
+<p class="font-bold">¥${shiftStats.night.toLocaleString()}</p>
+</div>
+
+<div class="p-3 bg-purple-50 rounded text-center">
+<p class="text-[10px] text-purple-600">深夜<br>0時以降START</p>
+<p class="font-bold">¥${shiftStats.late.toLocaleString()}</p>
+</div>
+
+</div>
+</div>
+`;
+
+perfEl.innerHTML=`
+
+<div class="grid grid-cols-2 gap-3">
+
+<div class="p-3 bg-slate-50 rounded">
+<p class="text-[10px] text-gray-400">時間辺り売上</p>
+<p class="font-bold">¥${stats.hours>0?Math.round(stats.total/stats.hours).toLocaleString():0}</p>
+</div>
+
+<div class="p-3 bg-slate-50 rounded">
+<p class="text-[10px] text-gray-400">燃料費</p>
+<p class="font-bold text-red-500">¥${Math.round(gas).toLocaleString()}</p>
+</div>
+
+<div class="p-3 bg-blue-50 rounded col-span-2 flex justify-between items-center">
+
+<p class="text-[10px] text-blue-500 font-bold">
+推定手取り(歩合${settings.salaryPercentage}%)
+</p>
+
+<p class="text-lg font-black text-blue-700">
+¥${Math.round(stats.total * settings.salaryPercentage / 100).toLocaleString()}
+</p>
+
+</div>
+
+</div>
+
+<div class="grid grid-cols-3 gap-3 mt-4">
+
+<div class="p-3 bg-purple-50 rounded text-center">
+<p class="text-[10px] text-purple-500">平均単価</p>
+<p class="font-bold">¥${avgRide.toLocaleString()}</p>
+</div>
+
+<div class="p-3 bg-green-50 rounded text-center">
+<p class="text-[10px] text-green-600">最高売上</p>
+<p class="font-bold">¥${maxFare.toLocaleString()}</p>
+</div>
+
+<div class="p-3 bg-orange-50 rounded text-center">
+<p class="text-[10px] text-orange-600">km売上</p>
+<p class="font-bold">¥${perKm}</p>
+</div>
+
+</div>
+
+${weekdayHTML}
+
+${shiftHTML}
+
+`;
+
+}
+
+}
+
+        /** --- ACTIONS --- **/
+        function changeMonth(offset) {
+            currentDate.setMonth(currentDate.getMonth() + offset);
+            renderApp();
+        }
+
+        function openModal(ds) {
+            selectedDateStr = ds; 
+            const r = records[ds] || {};
+            document.getElementById('modal-date-label').innerText = ds.replace(/-/g,'/');
+            document.getElementById('start-time').value = r.startTime || '';
+            document.getElementById('end-time').value = r.endTime || '';
+            document.getElementById('s-go').value = r.sGo || ''; document.getElementById('c-go').value = r.cGo || '';
+            document.getElementById('s-uber').value = r.sUber || ''; document.getElementById('c-uber').value = r.cUber || '';
+            document.getElementById('s-didi').value = r.sDidi || ''; document.getElementById('c-didi').value = r.cDidi || ''; 
+            document.getElementById('s-other').value = r.sOther || ''; document.getElementById('c-other').value = r.cOther || '';
+            document.getElementById('exp-fee').value = r.express || ''; document.getElementById('mile-dist').value = r.mileage || '';
+            document.getElementById('delete-btn').classList.toggle('hidden', !records[ds]);
+            previewPerf(); 
+            document.getElementById('input-modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('input-modal').classList.add('hidden'); }
+
+        function saveData() {
+            const getInt = (id) => parseInt(document.getElementById(id).value) || 0;
+            records[selectedDateStr] = {
+                startTime: document.getElementById('start-time').value, endTime: document.getElementById('end-time').value,
+                sGo: getInt('s-go'), cGo: getInt('c-go'), sUber: getInt('s-uber'), cUber: getInt('c-uber'),
+                sDidi: getInt('s-didi'), cDidi: getInt('c-didi'), sOther: getInt('s-other'), cOther: getInt('c-other'),
+                express: getInt('exp-fee'), mileage: parseFloat(document.getElementById('mile-dist').value) || 0
+            };
+            saveRecords(); closeModal(); renderApp();
+        }
+
+        function deleteRecord() { if(confirm("削除しますか？")) { delete records[selectedDateStr]; saveRecords(); closeModal(); renderApp(); } }
+
+function previewPerf() {
+
+    const h = calculateHours(
+        document.getElementById('start-time').value,
+        document.getElementById('end-time').value
+    );
+
+    const total =
+        (parseInt(document.getElementById('s-go').value)||0) +
+        (parseInt(document.getElementById('s-uber').value)||0) +
+        (parseInt(document.getElementById('s-didi').value)||0) +
+        (parseInt(document.getElementById('s-other').value)||0);
+
+    if (h > 0 || total > 0) {
+
+        document.getElementById('modal-analysis-footer').classList.remove('hidden');
+
+        document.getElementById('m-hours').innerText = h.toFixed(1);
+
+        document.getElementById('m-hourly').innerText =
+            `¥${h > 0 ? Math.round(total/h).toLocaleString() : 0}`;
+
+        const dist = parseFloat(document.getElementById('mile-dist').value)||0;
+
+        // ✅ 燃料費（NaN防止済み）
+        document.getElementById('m-gas').innerText =
+            `¥${Math.round((dist/settings.fuelEfficiency)*settings.gasPrice).toLocaleString()}`;
+
+        // =========================
+        // ここから追加👇
+        // =========================
+
+        const cnt =
+            (parseInt(document.getElementById('c-go').value)||0) +
+            (parseInt(document.getElementById('c-uber').value)||0) +
+            (parseInt(document.getElementById('c-didi').value)||0) +
+            (parseInt(document.getElementById('c-other').value)||0);
+
+        const avgRide = cnt > 0 ? Math.round(total / cnt) : 0;
+
+        document.getElementById('m-avg').innerText =
+            `¥${avgRide.toLocaleString()}`;
+
+        // =========================
+        // ここまで追加👆
+        // =========================
+
+    } else {
+        document.getElementById('modal-analysis-footer').classList.add('hidden');
+    }
+}
+
+function formatK(num){
+
+if(num >= 1000){
+return (num/1000).toFixed(1) + "K";
+}
+
+return "¥" + num.toLocaleString();
+
+}
+
+        function calculateHours(s, e) {
+            if (!s || !e) return 0;
+            const [sH, sM] = s.split(':').map(Number); const [eH, eM] = e.split(':').map(Number);
+            let sD = new Date(2000,0,1,sH,sM), eD = new Date(2000,0,1,eH,eM);
+            if (eD <= sD) eD.setDate(eD.getDate()+1);
+            return (eD - sD) / 3600000;
+        }
+
+        function switchTab(tid) {
+            if (isReportMode && tid !== 'history') toggleReportMode();
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`tab-${tid}`).classList.add('active');
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                const active = b.dataset.tab === tid;
+                b.classList.toggle('text-blue-600', active); b.classList.toggle('text-gray-400', !active);
+            });
+            renderApp();
+        }
+
+        function toggleReportMode() {
+            isReportMode = !isReportMode;
+            document.getElementById('main-header').classList.toggle('hidden', isReportMode);
+            document.getElementById('summary-cards').classList.toggle('hidden', isReportMode);
+            document.getElementById('bottom-nav').classList.toggle('hidden', isReportMode);
+            document.getElementById('report-header').classList.toggle('hidden', !isReportMode);
+            document.getElementById('th-platform-report').classList.toggle('hidden', !isReportMode);
+            document.getElementById('save-image-btn').classList.toggle('hidden', !isReportMode);
+            document.querySelectorAll('.no-report').forEach(el => el.classList.toggle('hidden', isReportMode));
+            document.getElementById('report-mode-btn').innerText = isReportMode ? "戻る" : "提出用レポート";
+            renderApp();
+        }
+
+        async function captureReport() {
+            const area = document.getElementById('report-capture-area');
+            const overlay = document.getElementById('loading-overlay');
+            overlay.classList.remove('hidden');
+            document.getElementById('report-footer').classList.remove('hidden');
+            try {
+                const canvas = await html2canvas(area, { scale: 1.5 });
+                const link = document.createElement('a');
+                link.download = `report_${formatDate(new Date())}.png`;
+                link.href = canvas.toDataURL("image/png"); link.click();
+            } finally {
+                document.getElementById('report-footer').classList.add('hidden');
+                overlay.classList.add('hidden');
+            }
+        }
+
+        function toggleSettings() { document.getElementById('settings-section').classList.toggle('hidden'); }
+        function updateCalculations() { saveSettings(); renderApp(); }
+        function formatDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        function formatDateDisplay(d) { return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
+        function saveRecords() { localStorage.setItem('rideshare_v5_records', JSON.stringify(records)); }
+        function loadRecords() { const r = localStorage.getItem('rideshare_v5_records'); if (r) records = JSON.parse(r); }
+        function saveSettings() {
+            settings.gasPrice = parseInt(document.getElementById('gas-price').value);
+            settings.fuelEfficiency = parseInt(document.getElementById('fuel-efficiency').value);
+            settings.salaryPercentage = parseInt(document.getElementById('salary-percentage').value);
+            settings.closingDay = parseInt(document.getElementById('closing-day').value);
+            localStorage.setItem('rideshare_v5_settings', JSON.stringify(settings));
+        }
+        function loadSettings() {
+            const s = localStorage.getItem('rideshare_v5_settings');
+            if (s) {
+                settings = JSON.parse(s);
+                document.getElementById('gas-price').value = settings.gasPrice;
+                document.getElementById('fuel-efficiency').value = settings.fuelEfficiency;
+                document.getElementById('salary-percentage').value = settings.salaryPercentage;
+                document.getElementById('closing-day').value = settings.closingDay;
+            }
+        }
+        function exportBackup() {
+            const b = new Blob([JSON.stringify({records, settings})], {type:'application/json'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `backup.json`; a.click();
+        }
+        function triggerImport() { document.getElementById('import-file').click(); }
+        function handleImport(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const data = JSON.parse(ev.target.result);
+                if (data.records) { records = data.records; settings = data.settings; saveRecords(); saveSettings(); location.reload(); }
+            };
+            reader.readAsText(e.target.files[0]);
+        }
+
+    </script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js")
+    .then(() => console.log("PWA ready"))
+    .catch(err => console.log(err));
+}
+</script>
+
+<script>
+
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+
+  e.preventDefault();
+
+  deferredPrompt = e;
+
+  document.getElementById("installBtn").style.display = "block";
+
+});
+
+document.getElementById("installBtn").addEventListener("click", async () => {
+
+  if (!deferredPrompt) return;
+
+  deferredPrompt.prompt();
+
+  const { outcome } = await deferredPrompt.userChoice;
+
+  if (outcome === "accepted") {
+
+    console.log("インストール成功");
+
+  }
+
+  deferredPrompt = null;
+
+  document.getElementById("installBtn").style.display = "none";
+
+});
+
+</script>
+
+</body>
+</html>
 
