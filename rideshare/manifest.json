@@ -1,0 +1,22 @@
+{
+  "name": "ライドシェア売上管理 Pro",
+  "short_name": "RideSharePro",
+  "description": "./index.html",
+  "start_url": "https://www.rakuten.ne.jp/gold/netpowers/rideshare/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e293b",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
