@@ -381,14 +381,31 @@ async function initApp() {
     });
 }
 
-        function initMap() {
-            if (map) return;
-            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([35.6895, 139.6917], 14);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+function initMap() {
+    if (map) return;
 
-            editMap = L.map('edit-map', { zoomControl: false, attributionControl: false }).setView([35.6895, 139.6917], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(editMap);
-        }
+    map = L.map('map', { zoomControl: false, attributionControl: false })
+    .setView([35.6895, 139.6917], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+    .addTo(map);
+
+    // ★ここを追加
+    map.on("zoomend", () => {
+
+        console.log("zoom changed");
+
+        listenToDrivers();
+
+    });
+
+
+    editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
+    .setView([35.6895, 139.6917], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+    .addTo(editMap);
+}
 
 
 
@@ -558,6 +575,18 @@ updateSalesUI()
 
        
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
+
+function getGridSize(){
+
+const zoom = map.getZoom()
+
+if(zoom >= 16) return 20   // 約500m
+if(zoom >= 14) return 10   // 約1km
+if(zoom >= 12) return 5    // 約2km
+
+return 1 // 広域（関東）
+}
+        
 function listenToDrivers(){
 
 console.log("listenToDrivers started")
@@ -566,8 +595,10 @@ setInterval(async()=>{
 
 if(currentLat===null || currentLng===null) return
 
+const size = getGridSize()
+
 const grid =
-Math.floor(currentLat*100)+"_"+Math.floor(currentLng*100)
+Math.floor(currentLat*size)+"_"+Math.floor(currentLng*size)
 
 try{
 
