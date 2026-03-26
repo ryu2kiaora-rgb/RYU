@@ -532,7 +532,7 @@ document.addEventListener("visibilitychange", () => {
 
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
  function listenToDrivers(){
-
+console.log("listenToDrivers started")
 setInterval(async()=>{
 
 if(currentLat===null || currentLng===null) return
