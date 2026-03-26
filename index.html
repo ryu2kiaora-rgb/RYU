@@ -543,23 +543,34 @@ Math.floor(currentLat*100)+"_"+Math.floor(currentLng*100)
 
 try{
 
-const onlineLimit = new Date(Date.now()-600000)
-
-// 全体オンライン人数
+// ===== 全体オンライン人数 =====
 const allSnap = await db
 .collection(getPublicPath('drivers'))
-.where("updatedAt", ">", onlineLimit)
 .get()
 
-document.getElementById('online-count').innerText = allSnap.size
+let totalOnline = 0
+const now = new Date()
 
-// 近くのドライバー
+allSnap.forEach(doc=>{
+
+const d = doc.data()
+
+const age = now-(d.updatedAt?.toDate()||now)
+
+if(age < 600000){
+totalOnline++
+}
+
+})
+
+document.getElementById('online-count').innerText = totalOnline
+
+
+// ===== 近くのドライバー =====
 const snap = await db
 .collection(getPublicPath('drivers'))
 .where("grid","==",grid)
 .get()
-
-const now=new Date()
 
 snap.forEach(doc=>{
 
