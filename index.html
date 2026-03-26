@@ -368,7 +368,7 @@ async function initApp() {
             user = u;
             initMap();
             initNumpad();
-            // listenToSales(); ← 削除
+            listenToSales();
             listenToDrivers();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
@@ -529,6 +529,36 @@ document.addEventListener("visibilitychange", () => {
 
 });
 
+
+function listenToSales() {
+
+const path = getPrivatePath('sales')
+if(!path) return
+
+const thirtyDaysAgo = new Date()
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+const dateLimit = formatDate(thirtyDaysAgo)
+
+db.collection(path)
+.where('dateStr','>=',dateLimit)
+.onSnapshot(snap=>{
+
+salesLogs = snap.docs.map(doc=>({
+id:doc.id,
+...doc.data()
+}))
+
+updateSalesUI()
+
+})
+
+}
+
+
+// 既存
+function listenToDrivers(){
+        
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
 function listenToDrivers(){
 
