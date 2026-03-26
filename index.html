@@ -362,25 +362,25 @@ function sendToGAS(data, logId){
         const getPublicPath = (col) => `artifacts/${appId}/public/data/${col}`;
         const getPrivatePath = (col) => user ? `artifacts/${appId}/users/${user.uid}/${col}` : null;
 
-        async function initApp() {
-            auth.onAuthStateChanged(async (u) => {
-                if (u) {
-                    user = u;
-                    initMap();
-                    initNumpad();
-                    listenToSales();
-                    listenToDrivers();
-                    refreshRanking(); // リアルタイムではなく、初回のみ手動取得
-                    document.getElementById('auth-loading-ui').classList.add('hidden');
-                    if (userName) {
-                        updateNameDisplay();
-                        document.getElementById('start-shift-ui').classList.remove('hidden');
-                    } else {
-                        document.getElementById('registration-ui').classList.remove('hidden');
-                    }
-                } else { await auth.signInAnonymously(); }
-            });
-        }
+async function initApp() {
+    auth.onAuthStateChanged(async (u) => {
+        if (u) {
+            user = u;
+            initMap();
+            initNumpad();
+            // listenToSales(); ← 削除
+            listenToDrivers();
+            refreshRanking(); 
+            document.getElementById('auth-loading-ui').classList.add('hidden');
+            if (userName) {
+                updateNameDisplay();
+                document.getElementById('start-shift-ui').classList.remove('hidden');
+            } else {
+                document.getElementById('registration-ui').classList.remove('hidden');
+            }
+        } else { await auth.signInAnonymously(); }
+    });
+}
 
         function initMap() {
             if (map) return;
