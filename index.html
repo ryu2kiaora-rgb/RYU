@@ -556,9 +556,7 @@ updateSalesUI()
 }
 
 
-// 既存
-function listenToDrivers(){
-        
+       
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
 function listenToDrivers(){
 
@@ -1035,8 +1033,7 @@ function getBusinessTimestamp(log){
                 const adjustedHour = (h < 12) ? h + 24 : h;
                 return adjustedHour * 60 + m;
             };
-            // b - a で降順（新しい順：深夜2時 > 23時 > 12時）
-            return getSortValue(b.timeStr) - getSortValue(a.sortValue || a.timeStr); 
+
             // ※a.timeStrを使って計算するように修正
             return getSortValue(b.timeStr) - getSortValue(a.timeStr);
         });
