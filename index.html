@@ -627,23 +627,6 @@ console.log("driver read error",e)
             } catch(e) {}
         }
 
-        // [節約モード] 売上ログの取得を直近30日分に制限
-        function listenToSales() {
-            const path = getPrivatePath('sales');
-            if (!path) return;
-            
-            const thirtyDaysAgo = new Date();
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const dateLimit = formatDate(thirtyDaysAgo);
-
-            // 過去ログ全件ではなく、直近30日のデータのみを監視
-            db.collection(path)
-              .where('dateStr', '>=', dateLimit)
-              .onSnapshot(snap => {
-                salesLogs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                updateSalesUI();
-            });
-        }
 
         function updateSalesUI() {
             const now = new Date();
