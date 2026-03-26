@@ -83,7 +83,43 @@
     <button id="btn-recenter" class="w-10 h-10 bg-white glass-panel flex items-center justify-center rounded-xl shadow-lg text-blue-600 border border-white/50 active:scale-90 transition-transform">
         <i class="fas fa-location-crosshairs text-lg"></i>
     </button>
-                
+
+                <div id="demand-box"
+style="
+position:absolute;
+right:12px;
+bottom:120px;
+display:flex;
+flex-direction:column;
+gap:8px;
+z-index:1000;
+">
+
+<button id="busy-btn"
+style="
+background:#ff4d4d;
+color:white;
+border:none;
+border-radius:8px;
+padding:8px 12px;
+font-size:14px;
+">
+🔥需要あり
+</button>
+
+<button id="idle-btn"
+style="
+background:#666;
+color:white;
+border:none;
+border-radius:8px;
+padding:8px 12px;
+font-size:14px;
+">
+😪暇
+</button>
+
+</div>
 </div>
 
 
@@ -306,6 +342,61 @@
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
+
+const stations = [
+
+/* 京浜東北線 */
+
+{ name:"川口駅", lat:35.8019, lng:139.7176 },
+{ name:"西川口駅", lat:35.8155, lng:139.7036 },
+{ name:"蕨駅", lat:35.8277, lng:139.6905 },
+{ name:"南浦和駅", lat:35.8485, lng:139.6694 },
+{ name:"浦和駅", lat:35.8586, lng:139.6571 },
+{ name:"北浦和駅", lat:35.8722, lng:139.6453 },
+{ name:"与野駅", lat:35.8845, lng:139.6333 },
+{ name:"さいたま新都心駅", lat:35.8938, lng:139.6331 },
+{ name:"大宮駅", lat:35.9062, lng:139.6233 },
+
+/* 埼京線 */
+
+{ name:"戸田公園駅", lat:35.8074, lng:139.6785 },
+{ name:"戸田駅", lat:35.8171, lng:139.6698 },
+{ name:"北戸田駅", lat:35.8365, lng:139.6611 },
+{ name:"武蔵浦和駅", lat:35.8460, lng:139.6476 },
+{ name:"中浦和駅", lat:35.8542, lng:139.6400 },
+{ name:"南与野駅", lat:35.8665, lng:139.6333 },
+{ name:"与野本町駅", lat:35.8814, lng:139.6286 },
+{ name:"北与野駅", lat:35.8896, lng:139.6260 },
+{ name:"大宮駅", lat:35.9062, lng:139.6233 },
+
+/* 武蔵野線 */
+
+{ name:"西浦和駅", lat:35.8424, lng:139.6302 },
+{ name:"武蔵浦和駅", lat:35.8460, lng:139.6476 },
+{ name:"南浦和駅", lat:35.8485, lng:139.6694 }
+
+]
+
+const stations = [
+
+{ name:"川口駅", lat:35.8019, lng:139.7176 },
+{ name:"西川口駅", lat:35.8155, lng:139.7036 },
+{ name:"蕨駅", lat:35.8277, lng:139.6905 },
+{ name:"南浦和駅", lat:35.8485, lng:139.6694 },
+{ name:"浦和駅", lat:35.8586, lng:139.6571 },
+{ name:"北浦和駅", lat:35.8722, lng:139.6453 },
+{ name:"与野駅", lat:35.8845, lng:139.6333 },
+{ name:"さいたま新都心駅", lat:35.8938, lng:139.6331 },
+{ name:"大宮駅", lat:35.9062, lng:139.6233 },
+
+{ name:"戸田公園駅", lat:35.8074, lng:139.6785 },
+{ name:"戸田駅", lat:35.8171, lng:139.6698 },
+{ name:"北戸田駅", lat:35.8365, lng:139.6611 },
+
+{ name:"西浦和駅", lat:35.8424, lng:139.6302 }
+
+]
+
 
         // ===== 位置移動距離計算（節約モード用） =====
 function calcDistance(lat1, lon1, lat2, lon2) {
@@ -1121,6 +1212,39 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
             }
         };
         // -----------------------
+
+
+        async function sendDemand(type){
+
+const station = getNearestStation()
+
+const now = new Date()
+
+const time =
+now.getHours().toString().padStart(2,'0')
++ ":" +
+now.getMinutes().toString().padStart(2,'0')
+
+const msg = time + " " + station + " " + type
+
+await fetch(
+GAS_URL+
+"?mode=notify"+
+"&name="+userName+
+"&msg="+encodeURIComponent(msg)
+)
+
+alert("通知送信")
+
+}
+
+document.getElementById("busy-btn").onclick = ()=>{
+sendDemand("需要あり")
+}
+
+document.getElementById("idle-btn").onclick = ()=>{
+sendDemand("暇")
+}
 
         // ===== ここに追加 =====
 
