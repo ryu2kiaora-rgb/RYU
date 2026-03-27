@@ -576,16 +576,6 @@ updateSalesUI()
        
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
 
-function getGridSize(){
-
-const zoom = map.getZoom()
-
-if(zoom >= 16) return 20   // 約500m
-if(zoom >= 14) return 10   // 約1km
-if(zoom >= 12) return 5    // 約2km
-
-return 1 // 広域（関東）
-}
         
 function listenToDrivers(){
 
@@ -595,10 +585,6 @@ setInterval(async()=>{
 
 if(currentLat===null || currentLng===null) return
 
-const size = getGridSize()
-
-const grid =
-Math.floor(currentLat*size)+"_"+Math.floor(currentLng*size)
 
 try{
 
@@ -628,7 +614,6 @@ document.getElementById('online-count').innerText = totalOnline
 // ===== 近くのドライバー =====
 const snap = await db
 .collection(getPublicPath('drivers'))
-.where("grid","==",grid)
 .get()
 
 snap.forEach(doc=>{
