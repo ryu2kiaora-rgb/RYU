@@ -906,11 +906,11 @@ function drawHeatmap(points){
     grid[key].amount += p.amount || 1;
   });
 
-  const heatData = Object.values(grid).map(g => [
-    g.lat / g.count,
-    g.lng / g.count,
-    Math.min(g.amount / 3000, 1) // ← 強さ調整OK
-  ]);
+const heatData = Object.values(grid).map(g => [
+  g.lat / g.count,
+  g.lng / g.count,
+  Math.min(g.count / 2, 1)
+]);
 
   // ===== 既存削除 =====
   if(heatLayer) map.removeLayer(heatLayer);
