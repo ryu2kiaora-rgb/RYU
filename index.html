@@ -919,15 +919,15 @@ const heatData = Object.values(grid).map(g => [
   const zoom = map.getZoom();
 
   const radius =
-    zoom < 13 ? 50 :
-    zoom < 15 ? 35 :
-    zoom < 17 ? 25 : 15;
+    zoom < 13 ? 25 :
+    zoom < 15 ? 20 :
+    zoom < 17 ? 15 : 10;
 
   // ===== 描画 =====
   heatLayer = L.heatLayer(heatData, {
     radius: radius,
-    blur: 25,
-    maxZoom: 10
+    blur: 15,
+    maxZoom: 17
   }).addTo(map);
 }        
         function createMarkerHtml(name, status) {
