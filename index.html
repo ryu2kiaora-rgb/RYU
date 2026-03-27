@@ -390,15 +390,6 @@ function initMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
     .addTo(map);
 
-    // ★ここを追加
-    map.on("zoomend", () => {
-
-        console.log("zoom changed");
-
-        listenToDrivers();
-
-    });
-
 
     editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
     .setView([35.6895, 139.6917], 15);
