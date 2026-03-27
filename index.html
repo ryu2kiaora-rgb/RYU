@@ -909,7 +909,7 @@ function drawHeatmap(points){
 const heatData = Object.values(grid).map(g => [
   g.lat / g.count,
   g.lng / g.count,
-  Math.min(g.count / 2, 1)
+  Math.min(g.count * 0.7, 1)
 ]);
 
   // ===== 既存削除 =====
