@@ -576,50 +576,30 @@ setInterval(async()=>{
 
 if(currentLat===null || currentLng===null) return
 
-
 try{
 
-// ===== 全体オンライン人数 =====
-const allSnap = await db
+const snap = await db
 .collection(getPublicPath('drivers'))
 .get()
 
 let totalOnline = 0
 const now = new Date()
 
-allSnap.forEach(doc=>{
+snap.forEach(doc=>{
 
 const d = doc.data()
 
-const age = now-(d.updatedAt?.toDate()||now)
-
-if(age < 600000){
-totalOnline++
-}
-
-})
-
-document.getElementById('online-count').innerText = totalOnline
-
-
-// ===== 近くのドライバー =====
-const snap = await db
-.collection(getPublicPath('drivers'))
-.get()
-
-snap.forEach(doc=>{
-
-const d=doc.data()
-
 if(d.lat===undefined || d.lng===undefined) return
 
-const age = now-(d.updatedAt?.toDate()||now)
+const age = now - (d.updatedAt?.toDate() || now)
 
-if(age<600000){
+if(age < 600000){
 
-if(user && doc.id!==user.uid && map){
+totalOnline++
 
-const icon=L.divIcon({
+if(user && doc.id !== user.uid && map){
+
+const icon = L.divIcon({
 html:createMarkerHtml(d.name,d.status),
 className:'',
 iconSize:[0,0]
@@ -633,7 +613,7 @@ otherMarkers[doc.id]
 
 }else{
 
-otherMarkers[doc.id]=
+otherMarkers[doc.id] =
 L.marker([d.lat,d.lng],{icon})
 .addTo(map)
 
@@ -653,6 +633,8 @@ delete otherMarkers[doc.id]
 }
 
 })
+
+document.getElementById('online-count').innerText = totalOnline
 
 }catch(e){
 
