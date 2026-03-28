@@ -569,11 +569,12 @@ updateSalesUI()
 
 let driverInterval = null;
 
-function listenToDrivers(){
-    if(driverInterval) return;
+async function listenToDrivers() {
+    if (driverInterval) return;
 
     const fetchDrivers = async () => {
-        if(currentLat === null || currentLng === null) return;
+        if (currentLat === null || currentLng === null) return;
+
         try {
             const snap = await db.collection(getPublicPath('drivers')).get();
             let totalOnline = 0;
@@ -581,27 +582,31 @@ function listenToDrivers(){
 
             snap.forEach(doc => {
                 const d = doc.data();
-                if(d.lat === undefined || d.lng === undefined) return;
+
+                if (d.lat === undefined || d.lng === undefined) return;
 
                 const age = now - (d.updatedAt?.toDate() || now);
 
-                // 柔軟判定: 15分以内はオンライン、30分以上は削除
-                if(age < 900000){ // 15分以内
+                // 15分以内はオンラインとしてカウント
+                if (age < 900000) { // 900000ms = 15分
                     totalOnline++;
-                    if(user && doc.id !== user.uid && map){
+
+                    if (map) {
                         const icon = L.divIcon({
                             html: createMarkerHtml(d.name, d.status),
                             className: '',
-                            iconSize: [0,0]
+                            iconSize: [0, 0]
                         });
-                        if(otherMarkers[doc.id]){
+
+                        if (otherMarkers[doc.id]) {
                             otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
                         } else {
-                            otherMarkers[doc.id] = L.marker([d.lat, d.lng], {icon}).addTo(map);
+                            otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
                         }
                     }
-                } else if(age >= 1800000){ // 30分以上経過したら消す
-                    if(otherMarkers[doc.id]){
+
+                } else if (age >= 1800000) { // 30分以上経過したら削除
+                    if (otherMarkers[doc.id]) {
                         map.removeLayer(otherMarkers[doc.id]);
                         delete otherMarkers[doc.id];
                     }
@@ -609,7 +614,8 @@ function listenToDrivers(){
             });
 
             document.getElementById('online-count').innerText = totalOnline;
-        } catch(e){
+
+        } catch (e) {
             console.log("driver read error", e);
         }
     };
@@ -617,7 +623,6 @@ function listenToDrivers(){
     fetchDrivers(); // 即時実行
     driverInterval = setInterval(fetchDrivers, 60000); // 1分おき
 }
-
 
 
 
