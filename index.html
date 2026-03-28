@@ -415,33 +415,26 @@ async function syncStatusToFirestore(force=false){
         .filter(l=>l.dateStr===todayStr)
         .reduce((s,l)=>s+l.amount,0);
 
-// --- ここから（initMap関数内の該当箇所を貼り替え） ---
-    db.collection(getPublicPath('drivers')).onSnapshot(snapshot => {
-        // デバッグ用ログ：データが届いているか確認
-        console.log("--- データ更新受信 ---", snapshot.size, "件");
+    // grid変数は計算していても、Firestoreへ送るオブジェクトからは除外する
+    try {
+        await db
+            .doc(`${getPublicPath('drivers')}/${user.uid}`)
+            .set({
+                name: userName,
+                lat: currentLat,
+                lng: currentLng,
+                // grid: grid,  <-- ❌ ここを削除。ルールで許可されていないため400エラーの原因になります。
+                status: isDriving ? "occupied" : "on",
+                todaySales: todayTotal,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge: true});
 
-        snapshot.docs.forEach(doc => {
-            const d = doc.data();
-            
-            // 各ドライバーのデータ受信ログ
-            console.log("受信データ:", d.name, d);
-
-            // 【重要】!d.updatedAt のチェックを外しました
-            // 以前のルール拒否エラーの影響で、updatedAtが空のデータが残っていても表示されるようになります
-            if (!d.lat || !d.lng) return;
-
-            if (user && doc.id === user.uid) {
-                // 自分の位置（既に描画済みなら更新）
-                if (typeof updateMyMarker === 'function') updateMyMarker(d);
-            } else {
-                // 他人の位置を描画
-                renderDriverMarker(doc.id, d);
-            }
-        });
-    }, err => {
-        console.error("Firestore読み込みエラー:", err);
-    });
-// --- ここまで ---
+        lastLat = currentLat;
+        lastLng = currentLng;
+    } catch(e) {
+        console.error("sync error", e);
+    }
+}
 // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
 function startGPS(){
 
@@ -570,31 +563,20 @@ async function listenToDrivers() {
             let totalOnline = 0;
             const now = new Date();
 
-            console.log("--- ドライバーデータ受信 ---", snap.size, "件");
-
             snap.forEach(doc => {
                 const d = doc.data();
-                
-                // 1. 座標チェックをより確実に（d.lat/lng が 0 の場合も考慮）
-                if (d.lat == null || d.lng == null) return;
 
-                // 2. updatedAt が壊れていても動くように修正
-                let updatedDate;
-                try {
-                    updatedDate = d.updatedAt ? d.updatedAt.toDate() : now;
-                } catch (e) {
-                    updatedDate = now; // 変換失敗時は「今」として扱う
-                }
+                if (d.lat === undefined || d.lng === undefined) return;
 
-                const age = now - updatedDate;
+                const age = now - (d.updatedAt?.toDate() || now);
 
-                // 30分以内のデータなら地図に表示（少し条件を緩めて確実に表示させる）
-                if (age < 1800000) { 
+                // 15分以内はオンラインとしてカウント
+                if (age < 900000) { // 900000ms = 15分
                     totalOnline++;
 
                     if (map) {
                         const icon = L.divIcon({
-                            html: createMarkerHtml(d.name || "不明", d.status || "on"),
+                            html: createMarkerHtml(d.name, d.status),
                             className: '',
                             iconSize: [0, 0]
                         });
@@ -605,8 +587,8 @@ async function listenToDrivers() {
                             otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
                         }
                     }
-                } else {
-                    // 古いデータは地図から消す
+
+                } else if (age >= 1800000) { // 30分以上経過したら削除
                     if (otherMarkers[doc.id]) {
                         map.removeLayer(otherMarkers[doc.id]);
                         delete otherMarkers[doc.id];
@@ -614,8 +596,7 @@ async function listenToDrivers() {
                 }
             });
 
-            const onlineCountElem = document.getElementById('online-count');
-            if(onlineCountElem) onlineCountElem.innerText = totalOnline;
+            document.getElementById('online-count').innerText = totalOnline;
 
         } catch (e) {
             console.log("driver read error", e);
