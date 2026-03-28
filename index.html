@@ -567,12 +567,15 @@ updateSalesUI()
        
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
 
-        
+let driverInterval = null;
+
 function listenToDrivers(){
+
+if(driverInterval) return;
 
 console.log("listenToDrivers started")
 
-setInterval(async()=>{
+driverInterval = setInterval(async()=>{
 
 if(currentLat===null || currentLng===null) return
 
