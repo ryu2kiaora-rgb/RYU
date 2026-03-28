@@ -646,21 +646,7 @@ console.log("driver read error",e)
 
 }
 
-        // [節約モード] ランキングはリアルタイムをやめ、手動更新（get）にする
-        async function refreshRanking() {
-            try {
-                const snap = await db.collection(getPublicPath('drivers')).get();
-                const rankingData = snap.docs.map(doc => doc.data())
-                    .filter(d => (new Date() - (d.updatedAt?.toDate() || 0)) < 86400000)
-                    .sort((a, b) => (b.todaySales || 0) - (a.todaySales || 0)).slice(0, 5);
-                const rankList = document.getElementById('ranking-list');
-                rankList.innerHTML = rankingData.length ? rankingData.map((d, i) => `
-                    <div class="flex justify-between items-center ${d.name === userName ? 'text-blue-600 font-bold' : 'text-gray-600'}">
-                        <span class="truncate pr-1">${i+1}. ${d.name || '???'}</span>
-                        <span class="whitespace-nowrap">¥${((d.todaySales || 0)/1000).toFixed(1)}k</span>
-                    </div>`).join('') : '<p class="text-[9px] text-gray-400 italic">データなし</p>';
-            } catch(e) {}
-        }
+
 
 
         function updateSalesUI() {
@@ -841,7 +827,7 @@ logId:editingLogId
                 sendToGAS(data,docRef.id)
                 localStorage.removeItem("rideStart");
 rideStartTimestamp = null;
-                refreshRanking(); // 売上が増えたのでランキングを再取得
+                //refreshRanking(); // 売上が増えたのでランキングを再取得
             }
             document.getElementById('modal-payment').classList.add('hidden');
             currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
@@ -978,7 +964,7 @@ function getBusinessTimestamp(log){
             document.querySelectorAll('.nav-item').forEach(n => n.classList.replace('text-blue-600', 'text-gray-400'));
             document.getElementById('nav-' + tab).classList.replace('text-gray-400', 'text-blue-600');
             if(tab === 'home' && map) setTimeout(() => map.invalidateSize(), 200);
-            if(tab === 'home') refreshRanking(); // ホームに戻るたびにランキングを更新
+            // if(tab === 'home') refreshRanking(); // ホームに戻るたびにランキングを更新
         }
 
         function initNumpad() {
