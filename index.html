@@ -570,83 +570,52 @@ updateSalesUI()
 let driverInterval = null;
 
 function listenToDrivers(){
+    if(driverInterval) return;
 
-if(driverInterval) return;
+    const fetchDrivers = async () => {
+        if(currentLat === null || currentLng === null) return;
+        try {
+            const snap = await db.collection(getPublicPath('drivers')).get();
+            let totalOnline = 0;
+            const now = new Date();
 
-console.log("listenToDrivers started")
+            snap.forEach(doc => {
+                const d = doc.data();
+                if(d.lat === undefined || d.lng === undefined) return;
 
-driverInterval = setInterval(async()=>{
+                const age = now - (d.updatedAt?.toDate() || now);
 
-if(currentLat===null || currentLng===null) return
+                // 柔軟判定: 15分以内はオンライン、30分以上は削除
+                if(age < 900000){ // 15分以内
+                    totalOnline++;
+                    if(user && doc.id !== user.uid && map){
+                        const icon = L.divIcon({
+                            html: createMarkerHtml(d.name, d.status),
+                            className: '',
+                            iconSize: [0,0]
+                        });
+                        if(otherMarkers[doc.id]){
+                            otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                        } else {
+                            otherMarkers[doc.id] = L.marker([d.lat, d.lng], {icon}).addTo(map);
+                        }
+                    }
+                } else if(age >= 1800000){ // 30分以上経過したら消す
+                    if(otherMarkers[doc.id]){
+                        map.removeLayer(otherMarkers[doc.id]);
+                        delete otherMarkers[doc.id];
+                    }
+                }
+            });
 
-try{
+            document.getElementById('online-count').innerText = totalOnline;
+        } catch(e){
+            console.log("driver read error", e);
+        }
+    };
 
-const snap = await db
-.collection(getPublicPath('drivers'))
-.get()
-
-let totalOnline = 0
-const now = new Date()
-
-snap.forEach(doc=>{
-
-const d = doc.data()
-
-if(d.lat===undefined || d.lng===undefined) return
-
-const age = now - (d.updatedAt?.toDate() || now)
-
-if(age < 600000){
-
-totalOnline++
-
-if(user && doc.id !== user.uid && map){
-
-const icon = L.divIcon({
-html:createMarkerHtml(d.name,d.status),
-className:'',
-iconSize:[0,0]
-})
-
-if(otherMarkers[doc.id]){
-
-otherMarkers[doc.id]
-.setLatLng([d.lat,d.lng])
-.setIcon(icon)
-
-}else{
-
-otherMarkers[doc.id] =
-L.marker([d.lat,d.lng],{icon})
-.addTo(map)
-
-}
-
-}
-
-}else{
-
-if(otherMarkers[doc.id]){
-
-map.removeLayer(otherMarkers[doc.id])
-delete otherMarkers[doc.id]
-
-}
-
-}
-
-})
-
-document.getElementById('online-count').innerText = totalOnline
-
-}catch(e){
-
-console.log("driver read error",e)
-
-}
-
-},60000)
-
+    fetchDrivers(); // 即時実行
+    driverInterval = setInterval(fetchDrivers, 60000); // 1分おき
 }
 
 
