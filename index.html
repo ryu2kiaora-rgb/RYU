@@ -624,7 +624,9 @@ async function listenToDrivers() {
 
     fetchDrivers(); // 即時実行
     driverInterval = setInterval(fetchDrivers, 60000); // 1分おき
-}
+}; // <--- (1) fetchDrivers (内部関数) の終わり
+
+} // <--- (2) listenToDrivers (メイン関数) の終わり
 
 
 
