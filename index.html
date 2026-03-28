@@ -401,56 +401,39 @@ function initMap() {
 
 
 // ===== Firebase節約モード（改良版） =====
+// --- 修正後のコード ---
 async function syncStatusToFirestore(force=false){
+    if(!user || currentLat===null || currentLng===null) return;
 
-if(!user || currentLat===null || currentLng===null) return
+    if(!force && lastLat!==null && lastLng!==null){
+        const distance = calcDistance(lastLat, lastLng, currentLat, currentLng);
+        if(distance < 80) return;
+    }
 
-if(!force && lastLat!==null && lastLng!==null){
+    const todayStr = getBusinessDate(new Date());
+    const todayTotal = salesLogs
+        .filter(l=>l.dateStr===todayStr)
+        .reduce((s,l)=>s+l.amount,0);
 
-const distance = calcDistance(
-lastLat,
-lastLng,
-currentLat,
-currentLng
-)
+    // grid変数は計算していても、Firestoreへ送るオブジェクトからは除外する
+    try {
+        await db
+            .doc(`${getPublicPath('drivers')}/${user.uid}`)
+            .set({
+                name: userName,
+                lat: currentLat,
+                lng: currentLng,
+                // grid: grid,  <-- ❌ ここを削除。ルールで許可されていないため400エラーの原因になります。
+                status: isDriving ? "occupied" : "on",
+                todaySales: todayTotal,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge: true});
 
-if(distance < 80) return
-}
-
-const todayStr = getBusinessDate(new Date())
-
-const todayTotal = salesLogs
-.filter(l=>l.dateStr===todayStr)
-.reduce((s,l)=>s+l.amount,0)
-
-const grid =
-Math.floor(currentLat*100)+"_"+Math.floor(currentLng*100)
-
-try{
-
-await db
-.doc(`${getPublicPath('drivers')}/${user.uid}`)
-.set({
-
-name:userName,
-lat:currentLat,
-lng:currentLng,
-//grid:grid,
-status:isDriving?"occupied":"on",
-todaySales:todayTotal,
-updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-
-},{merge:true})
-
-lastLat=currentLat
-lastLng=currentLng
-
-}catch(e){
-
-console.log("sync error",e)
-
-}
-
+        lastLat = currentLat;
+        lastLng = currentLng;
+    } catch(e) {
+        console.error("sync error", e);
+    }
 }
 // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
 function startGPS(){
