@@ -569,7 +569,10 @@ async function listenToDrivers() {
             let totalOnline = 0;
             const now = new Date();
 
+            const activeDrivers = {};
+
            snap.forEach(doc => {
+
 
     const d = doc.data();
 
@@ -578,10 +581,13 @@ async function listenToDrivers() {
     const age = now - (d.updatedAt?.toDate() || now);
 
     if (age < 900000) {
+              
+     activeDrivers[doc.id] = true;
 
         totalOnline++;
 
         if (user && doc.id === user.uid) return;
+
 
                     if (map) {
                         const icon = L.divIcon({
@@ -605,6 +611,21 @@ async function listenToDrivers() {
                 }
             });
 
+            Object.keys(otherMarkers).forEach(id => {
+
+    if (!activeDrivers[id]) {
+
+        if (map && otherMarkers[id]) {
+            map.removeLayer(otherMarkers[id]);
+        }
+
+        delete otherMarkers[id];
+
+    }
+
+});
+            
+
             document.getElementById('online-count').innerText = totalOnline;
 
         } catch (e) {
@@ -613,7 +634,7 @@ async function listenToDrivers() {
     };
 
     fetchDrivers(); // 即時実行
-    driverInterval = setInterval(fetchDrivers, 60000); // 1分おき
+    driverInterval = setInterval(fetchDrivers, 90000); // 1分半おき
 }
 
 
