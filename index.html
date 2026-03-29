@@ -44,6 +44,16 @@
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
 
+<!-- CSS: テキスト選択を防ぐ -->
+<style>
+#header-title {
+    user-select: none;          /* 通常ブラウザ */
+    -webkit-user-select: none;  /* Chrome/Safari */
+    -ms-user-select: none;      /* IE/Edge */
+    cursor: pointer;            /* 見た目もクリック可能に */
+}
+</style>
+
 <header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
     <h1 id="header-title" class="text-lg font-bold">
         RideShare <span class="text-blue-400">Connect</span>
@@ -61,6 +71,7 @@
         </button>
     </div>
 </header>
+
 
     <main class="relative h-[calc(100vh-128px)]">
         
@@ -1321,7 +1332,9 @@ startGASRanking();
 </script>
 
 <script>
-// ===== お遊びモード迎車追加 =====
+// ===== お遊びモード迎車（全員同期対応も可能） =====
+
+// 初期状態
 let carMode = "empty"; // 空車/実車
 let isOoiwakeMode = false; // お遊び迎車フラグ
 let userMarker = null;
@@ -1347,17 +1360,37 @@ function refreshUserMarker() {
     }
 }
 
-// ヘッダーのダブルタップで迎車モード切替
+// ダブルタップ判定
 const header = document.getElementById("header-title");
 let lastTap = 0;
-header.addEventListener("click", function() {
+
+// 実際に切り替える関数
+function toggleOoiwakeMode() {
+    isOoiwakeMode = !isOoiwakeMode;
+    console.log("お遊びモード迎車:", isOoiwakeMode ? "ON" : "OFF");
+    refreshUserMarker();
+
+    // ===== 全員同期（Firestore例） =====
+    // コメントアウトしている場合は自分だけ
+    // db.collection("settings").doc("ooiwakeMode").set({
+    //     isOoiwakeMode: isOoiwakeMode,
+    //     updatedAt: new Date()
+    // });
+}
+
+// クリック用
+header.addEventListener("click", function(e) {
+    e.preventDefault();
     const now = new Date().getTime();
-    const delta = now - lastTap;
-    if (delta < 300) { // 300ms以内のダブルタップ判定
-        isOoiwakeMode = !isOoiwakeMode;
-        console.log("お遊びモード迎車:", isOoiwakeMode ? "ON" : "OFF");
-        refreshUserMarker();
-    }
+    if (now - lastTap < 300) toggleOoiwakeMode();
+    lastTap = now;
+});
+
+// タッチ用（スマホ対応）
+header.addEventListener("touchend", function(e) {
+    e.preventDefault();
+    const now = new Date().getTime();
+    if (now - lastTap < 300) toggleOoiwakeMode();
     lastTap = now;
 });
 </script>
