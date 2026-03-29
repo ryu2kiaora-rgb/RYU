@@ -1190,6 +1190,11 @@ if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
     // 5. オーバーレイ（開始画面）への復帰
     document.getElementById("shift-overlay").style.display = "flex";
 };
+        // 追加（UIリセット）
+document.getElementById("online-count").innerText = "0";
+activeDrivers = {};
+otherMarkers = {};
+        
     </script>
 
    <script>
