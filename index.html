@@ -44,19 +44,23 @@
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
 
-    <header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
-        <h1 class="text-lg font-bold">RideShare <span class="text-blue-400">Connect</span></h1>
-        <div class="flex items-center gap-2">
-            <div id="user-info" class="text-xs bg-slate-700 px-3 py-1.5 rounded-full flex items-center">
-                <i class="fas fa-user-circle mr-1 text-blue-300"></i> <span id="display-user-name">読込中...</span>
-                <span class="mx-2 text-slate-500">|</span>
-                <i class="fas fa-signal mr-1 text-green-400 text-[10px]"></i><span id="online-count">0</span>
-            </div>
-            <button id="header-btn-end-shift" class="hidden bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">
-                <i class="fas fa-power-off mr-1"></i>終了
-            </button>
+<header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
+    <h1 id="header-title" class="text-lg font-bold">
+        RideShare <span class="text-blue-400">Connect</span>
+    </h1>
+    <div class="flex items-center gap-2">
+        <div id="user-info" class="text-xs bg-slate-700 px-3 py-1.5 rounded-full flex items-center">
+            <i class="fas fa-user-circle mr-1 text-blue-300"></i> 
+            <span id="display-user-name">読込中...</span>
+            <span class="mx-2 text-slate-500">|</span>
+            <i class="fas fa-signal mr-1 text-green-400 text-[10px]"></i>
+            <span id="online-count">0</span>
         </div>
-    </header>
+        <button id="header-btn-end-shift" class="hidden bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">
+            <i class="fas fa-power-off mr-1"></i>終了
+        </button>
+    </div>
+</header>
 
     <main class="relative h-[calc(100vh-128px)]">
         
@@ -1315,6 +1319,49 @@ async function startGASRanking(){
 
 startGASRanking();
 </script>
+
+<script>
+// ===== お遊びモード迎車追加 =====
+let carMode = "empty"; // 空車/実車
+let isOoiwakeMode = false; // お遊び迎車フラグ
+let userMarker = null;
+let currentLat = null;
+let currentLng = null;
+
+// マーカー更新関数（既存 getCarIcon() 使用）
+function updateCarMarker(lat, lng) {
+    const color = isOoiwakeMode ? "orange" : (carMode === "empty" ? "blue" : "red");
+    if (!userMarker) {
+        userMarker = L.marker([lat, lng], {
+            icon: L.icon({ iconUrl: getCarIcon(color), iconSize: [30,30] })
+        }).addTo(map);
+    } else {
+        userMarker.setIcon(L.icon({ iconUrl: getCarIcon(color), iconSize: [30,30] }));
+        userMarker.setLatLng([lat, lng]);
+    }
+}
+
+function refreshUserMarker() {
+    if (currentLat !== null && currentLng !== null) {
+        updateCarMarker(currentLat, currentLng);
+    }
+}
+
+// ヘッダーのダブルタップで迎車モード切替
+const header = document.getElementById("header-title");
+let lastTap = 0;
+header.addEventListener("click", function() {
+    const now = new Date().getTime();
+    const delta = now - lastTap;
+    if (delta < 300) { // 300ms以内のダブルタップ判定
+        isOoiwakeMode = !isOoiwakeMode;
+        console.log("お遊びモード迎車:", isOoiwakeMode ? "ON" : "OFF");
+        refreshUserMarker();
+    }
+    lastTap = now;
+});
+</script>
+    
     
 </body>
 </html>
