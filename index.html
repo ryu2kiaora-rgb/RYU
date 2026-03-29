@@ -306,6 +306,7 @@
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
+        let driverStatus = "on";
 
         // ===== 位置移動距離計算（節約モード用） =====
 function calcDistance(lat1, lon1, lat2, lon2) {
@@ -415,7 +416,12 @@ async function syncStatusToFirestore(force=false){
         .filter(l=>l.dateStr===todayStr)
         .reduce((s,l)=>s+l.amount,0);
 
-    // grid変数は計算していても、Firestoreへ送るオブジェクトからは除外する
+    let newStatus = isDriving ? "occupied" : "on";
+
+    if(driverStatus === "pickup" && !isDriving){
+        newStatus = "pickup";
+    }
+
     try {
         await db
             .doc(`${getPublicPath('drivers')}/${user.uid}`)
@@ -423,14 +429,14 @@ async function syncStatusToFirestore(force=false){
                 name: userName,
                 lat: currentLat,
                 lng: currentLng,
-                // grid: grid,  <-- ❌ ここを削除。ルールで許可されていないため400エラーの原因になります。
-                status: isDriving ? "occupied" : "on",
+                status: newStatus,
                 todaySales: todayTotal,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, {merge: true});
 
         lastLat = currentLat;
         lastLng = currentLng;
+
     } catch(e) {
         console.error("sync error", e);
     }
@@ -899,7 +905,7 @@ const heatData = Object.values(grid).map(g => [
     maxZoom: 17
   }).addTo(map);
 }        
-       function createMarkerHtml(name, status) {
+function createMarkerHtml(name, status) {
 
     let color = '#3b82f6';
     let label = '空車';
