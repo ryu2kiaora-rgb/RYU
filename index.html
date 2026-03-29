@@ -526,6 +526,17 @@ document.addEventListener("visibilitychange", () => {
 
 });
 
+        // ★ここに追加
+window.addEventListener("beforeunload", () => {
+
+    if(user){
+        db.collection(getPublicPath('drivers')).doc(user.uid).update({
+            status: "offline"
+        })
+    }
+
+});
+
 
 function listenToSales() {
 
