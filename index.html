@@ -440,6 +440,12 @@ function startGPS(){
 
 if(!navigator.geolocation) return
 
+// 既存マーカー削除（残像防止）
+if(userMarker){
+    map.removeLayer(userMarker)
+    userMarker=null
+}
+
 watchId = navigator.geolocation.watchPosition((pos)=>{
 
 if(pos.coords.accuracy>120) return
@@ -563,12 +569,15 @@ async function listenToDrivers() {
             let totalOnline = 0;
             const now = new Date();
 
-            snap.forEach(doc => {
-                const d = doc.data();
+           snap.forEach(doc => {
 
-                if (d.lat === undefined || d.lng === undefined) return;
+    if (user && doc.id === user.uid) return;
 
-                const age = now - (d.updatedAt?.toDate() || now);
+    const d = doc.data();
+
+    if (d.lat === undefined || d.lng === undefined) return;
+
+    const age = now - (d.updatedAt?.toDate() || now);
 
                 // 15分以内はオンラインとしてカウント
                 if (age < 900000) { // 900000ms = 15分
