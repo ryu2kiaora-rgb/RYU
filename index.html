@@ -44,34 +44,19 @@
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
 
-<!-- CSS: テキスト選択を防ぐ -->
-<style>
-#header-title {
-    user-select: none;          /* 通常ブラウザ */
-    -webkit-user-select: none;  /* Chrome/Safari */
-    -ms-user-select: none;      /* IE/Edge */
-    cursor: pointer;            /* 見た目もクリック可能に */
-}
-</style>
-
-<header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
-    <h1 id="header-title" class="text-lg font-bold">
-        RideShare <span class="text-blue-400">Connect</span>
-    </h1>
-    <div class="flex items-center gap-2">
-        <div id="user-info" class="text-xs bg-slate-700 px-3 py-1.5 rounded-full flex items-center">
-            <i class="fas fa-user-circle mr-1 text-blue-300"></i> 
-            <span id="display-user-name">読込中...</span>
-            <span class="mx-2 text-slate-500">|</span>
-            <i class="fas fa-signal mr-1 text-green-400 text-[10px]"></i>
-            <span id="online-count">0</span>
+    <header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
+        <h1 class="text-lg font-bold">RideShare <span class="text-blue-400">Connect</span></h1>
+        <div class="flex items-center gap-2">
+            <div id="user-info" class="text-xs bg-slate-700 px-3 py-1.5 rounded-full flex items-center">
+                <i class="fas fa-user-circle mr-1 text-blue-300"></i> <span id="display-user-name">読込中...</span>
+                <span class="mx-2 text-slate-500">|</span>
+                <i class="fas fa-signal mr-1 text-green-400 text-[10px]"></i><span id="online-count">0</span>
+            </div>
+            <button id="header-btn-end-shift" class="hidden bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">
+                <i class="fas fa-power-off mr-1"></i>終了
+            </button>
         </div>
-        <button id="header-btn-end-shift" class="hidden bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm">
-            <i class="fas fa-power-off mr-1"></i>終了
-        </button>
-    </div>
-</header>
-
+    </header>
 
     <main class="relative h-[calc(100vh-128px)]">
         
@@ -914,14 +899,27 @@ const heatData = Object.values(grid).map(g => [
     maxZoom: 17
   }).addTo(map);
 }        
-        function createMarkerHtml(name, status) {
-            const color = status === 'occupied' ? '#ef4444' : '#3b82f6';
-            return `<div class="driver-marker-container">
-                <div class="status-badge" style="background:${color}">${status==='occupied'?'実車':'空車'}</div>
-                <div class="driver-icon-inner" style="color:${color}"><i class="fas fa-car-side"></i></div>
-                <div class="driver-name-label">${name || 'ドライバー'}</div>
-            </div>`;
-        }
+       function createMarkerHtml(name, status) {
+
+    let color = '#3b82f6';
+    let label = '空車';
+
+    if(status === 'occupied'){
+        color = '#ef4444';
+        label = '実車';
+    }
+
+    if(status === 'pickup'){
+        color = '#f97316';
+        label = '迎車';
+    }
+
+    return `<div class="driver-marker-container">
+        <div class="status-badge" style="background:${color}">${label}</div>
+        <div class="driver-icon-inner" style="color:${color}"><i class="fas fa-car-side"></i></div>
+        <div class="driver-name-label">${name || 'ドライバー'}</div>
+    </div>`;
+}
 
         function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
         // ===== 営業日（昼12時区切り） =====
@@ -1072,14 +1070,43 @@ document.getElementById('summary-date-label').innerText =
 function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() + dir); renderCalendar(); }
         
         // --- ここに追加しました ---
-        document.getElementById('btn-recenter').onclick = () => {
-            if (userMarker) {
-                const latlng = userMarker.getLatLng();
-                map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
-            } else {
-                alert("現在地を取得中です...");
-            }
-        };
+let lastTap = 0;
+
+document.getElementById('btn-recenter').onclick = async () => {
+
+    const now = Date.now();
+
+    // ===== ダブルタップ判定 =====
+    if (now - lastTap < 300) {
+
+        const ref = db.collection(getPublicPath('drivers')).doc(driverId);
+
+        const snap = await ref.get();
+        const d = snap.data();
+
+        let newMode = "pickup";
+
+        if (d.mode === "pickup") newMode = "empty";
+
+        await ref.update({
+            mode: newMode
+        });
+
+        console.log("迎車モード:", newMode);
+
+    }
+
+    lastTap = now;
+
+    // ===== 既存の現在地戻る機能 =====
+    if (userMarker) {
+        const latlng = userMarker.getLatLng();
+        map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
+    } else {
+        alert("現在地を取得中です...");
+    }
+
+};
         // -----------------------
 
         // ===== ここに追加 =====
@@ -1330,71 +1357,6 @@ async function startGASRanking(){
 
 startGASRanking();
 </script>
-
-<script>
-// ===== お遊びモード迎車（全員同期対応も可能） =====
-
-// 初期状態
-let carMode = "empty"; // 空車/実車
-let isOoiwakeMode = false; // お遊び迎車フラグ
-let userMarker = null;
-let currentLat = null;
-let currentLng = null;
-
-// マーカー更新関数（既存 getCarIcon() 使用）
-function updateCarMarker(lat, lng) {
-    const color = isOoiwakeMode ? "orange" : (carMode === "empty" ? "blue" : "red");
-    if (!userMarker) {
-        userMarker = L.marker([lat, lng], {
-            icon: L.icon({ iconUrl: getCarIcon(color), iconSize: [30,30] })
-        }).addTo(map);
-    } else {
-        userMarker.setIcon(L.icon({ iconUrl: getCarIcon(color), iconSize: [30,30] }));
-        userMarker.setLatLng([lat, lng]);
-    }
-}
-
-function refreshUserMarker() {
-    if (currentLat !== null && currentLng !== null) {
-        updateCarMarker(currentLat, currentLng);
-    }
-}
-
-// ダブルタップ判定
-const header = document.getElementById("header-title");
-let lastTap = 0;
-
-// 実際に切り替える関数
-function toggleOoiwakeMode() {
-    isOoiwakeMode = !isOoiwakeMode;
-    console.log("お遊びモード迎車:", isOoiwakeMode ? "ON" : "OFF");
-    refreshUserMarker();
-
-    // ===== 全員同期（Firestore例） =====
-    // コメントアウトしている場合は自分だけ
-    // db.collection("settings").doc("ooiwakeMode").set({
-    //     isOoiwakeMode: isOoiwakeMode,
-    //     updatedAt: new Date()
-    // });
-}
-
-// クリック用
-header.addEventListener("click", function(e) {
-    e.preventDefault();
-    const now = new Date().getTime();
-    if (now - lastTap < 300) toggleOoiwakeMode();
-    lastTap = now;
-});
-
-// タッチ用（スマホ対応）
-header.addEventListener("touchend", function(e) {
-    e.preventDefault();
-    const now = new Date().getTime();
-    if (now - lastTap < 300) toggleOoiwakeMode();
-    lastTap = now;
-});
-</script>
-    
     
 </body>
 </html>
