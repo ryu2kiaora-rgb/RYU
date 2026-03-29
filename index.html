@@ -67,7 +67,7 @@
             <div class="absolute top-4 left-4 z-[500]">
     <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
         <div id="ranking-list" class="space-y-1 text-[10px]">
-            <p class="text-[9px] text-gray-400 italic">読込中...</p>
+            <p class="text-[9px] text-gray-400 italic">昼12時ﾘｾｯﾄ､売上計上で更新..</p>
         </div>
     </div>
 </div>
@@ -571,17 +571,17 @@ async function listenToDrivers() {
 
            snap.forEach(doc => {
 
-    if (user && doc.id === user.uid) return;
-
     const d = doc.data();
 
     if (d.lat === undefined || d.lng === undefined) return;
 
     const age = now - (d.updatedAt?.toDate() || now);
 
-                // 15分以内はオンラインとしてカウント
-                if (age < 900000) { // 900000ms = 15分
-                    totalOnline++;
+    if (age < 900000) {
+
+        totalOnline++;
+
+        if (user && doc.id === user.uid) return;
 
                     if (map) {
                         const icon = L.divIcon({
