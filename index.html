@@ -1103,6 +1103,18 @@ document.getElementById('btn-recenter').onclick = async () => {
         driverStatus = newStatus;
 
         console.log("迎車モード:", newStatus);
+                // ⭐ここ追加
+        if(userMarker){
+
+            const icon = L.divIcon({
+                html: createMarkerHtml(userName, newStatus),
+                className: '',
+                iconSize: [0,0]
+            });
+
+            userMarker.setIcon(icon);
+
+        }
     }
 
     lastTap = now;
