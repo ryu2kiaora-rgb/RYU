@@ -644,7 +644,7 @@ async function listenToDrivers() {
         }
     };
 
-    fetchDrivers(); // 即時実行
+    setTimeout(fetchDrivers, 5000); // 最初だけ5秒後
     driverInterval = setInterval(fetchDrivers, 90000); // 1分半おき
 }
 
