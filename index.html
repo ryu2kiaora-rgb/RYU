@@ -1082,29 +1082,32 @@ document.getElementById('btn-recenter').onclick = async () => {
 
     const now = Date.now();
 
-    // ===== ダブルタップ判定 =====
+    // ダブルタップ判定
     if (now - lastTap < 300) {
 
-        const ref = db.collection(getPublicPath('drivers')).doc(driverId);
+        const ref = db
+        .collection(getPublicPath('drivers'))
+        .doc(user.uid);
 
         const snap = await ref.get();
         const d = snap.data();
 
-        let newMode = "pickup";
+        let newStatus = "pickup";
 
-        if (d.mode === "pickup") newMode = "empty";
+        if (d.status === "pickup") newStatus = "on";
 
         await ref.update({
-            mode: newMode
+            status: newStatus
         });
 
-        console.log("迎車モード:", newMode);
+        driverStatus = newStatus;
 
+        console.log("迎車モード:", newStatus);
     }
 
     lastTap = now;
 
-    // ===== 既存の現在地戻る機能 =====
+    // 既存の現在地戻る機能
     if (userMarker) {
         const latlng = userMarker.getLatLng();
         map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
