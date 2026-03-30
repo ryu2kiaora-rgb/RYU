@@ -367,10 +367,17 @@ async function initApp() {
     auth.onAuthStateChanged(async (u) => {
         if (u) {
             user = u;
-            initMap();
-            initNumpad();
-            listenToSales();
-            listenToDrivers();
+            
+            // --- 修正：二重起動を防止する ---
+            if (!window.appInitialized) {
+                initMap();
+                initNumpad();
+                listenToSales();
+                listenToDrivers();
+                window.appInitialized = true; // 「初期化済み」の旗を立てる
+            }
+            // -----------------------------
+
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
                 updateNameDisplay();
@@ -378,7 +385,9 @@ async function initApp() {
             } else {
                 document.getElementById('registration-ui').classList.remove('hidden');
             }
-        } else { await auth.signInAnonymously(); }
+        } else { 
+            await auth.signInAnonymously(); 
+        }
     });
 }
 
@@ -545,57 +554,69 @@ window.addEventListener("beforeunload", () => {
 
 
 // Firestoreのリードを最小化する高効率・高速同期
-// 583行目付近をこの内容にそっくり入れ替えてください
 function listenToSales() {
-  const path = getPrivatePath('sales');
-  if (!path) return;
+    const path = getPrivatePath('sales');
+    if (!path) return;
 
-  // 起動時にスマホから読み込み
-  const cached = localStorage.getItem('ride_logs_cache');
-  if (cached) {
-    try {
-      salesLogs = JSON.parse(cached);
-      updateSalesUI();
-    } catch (e) { console.error("Cache read error", e); }
-  }
+    // 二重起動防止
+    if (window.isListeningSales) return;
+    window.isListeningSales = true;
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const dateLimit = formatDate(thirtyDaysAgo);
+    // 1. まずスマホの「引き出し」から読み込む
+    const cached = localStorage.getItem('ride_logs_cache');
+    if (cached) {
+        try {
+            salesLogs = JSON.parse(cached);
+            updateSalesUI(); // ネットを待たずに即表示
+        } catch (e) { console.error("Cache error", e); }
+    }
 
-  db.collection(path)
-    .where('dateStr', '>=', dateLimit)
-    .onSnapshot(snap => {
-      let hasChange = false;
-      snap.docChanges().forEach(change => {
-        const data = { id: change.doc.id, ...change.doc.data() };
-        hasChange = true;
-        
-        if (change.type === "added" || change.type === "modified") {
-          // ★ 重複チェックの魔法
-          // IDが一致するか、もしくは「temp-」で始まって内容（時間と金額）が同じものを探す
-          const idx = salesLogs.findIndex(l => 
-            l.id === data.id || 
-            (String(l.id).startsWith('temp-') && l.timeStr === data.timeStr && l.amount === data.amount)
-          );
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateLimit = formatDate(thirtyDaysAgo);
 
-          if (idx > -1) {
-            // 見つかったら、仮のデータを捨てて「本物のデータ」に差し替える
-            salesLogs[idx] = data; 
-          } else {
-            salesLogs.push(data);
-          }
-        } else if (change.type === "removed") {
-          salesLogs = salesLogs.filter(l => l.id !== data.id);
-        }
-      });
+    // 2. Firestoreに接続（差分監視モード）
+    db.collection(path)
+        .where('dateStr', '>=', dateLimit)
+        .onSnapshot(snap => {
+            let hasChange = false;
 
-      if (hasChange) {
-        // 保存して画面を更新
-        localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
-        updateSalesUI();
-      }
-    });
+            snap.docChanges().forEach(change => {
+                const data = { id: change.doc.id, ...change.doc.data() };
+                
+                if (change.type === "added" || change.type === "modified") {
+                    // ★【重複防止の要】
+                    // 「IDが一致」または「temp-で始まり、中身（時間・金額・日付）が一致」するものを探す
+                    const idx = salesLogs.findIndex(l => 
+                        l.id === data.id || 
+                        (String(l.id).startsWith('temp-') && 
+                         l.timeStr === data.timeStr && 
+                         l.amount === data.amount && 
+                         l.dateStr === data.dateStr)
+                    );
+
+                    if (idx > -1) {
+                        // 重複が見つかったら、古いデータ（仮データなど）を最新版（Firestore版）で上書き
+                        salesLogs[idx] = data;
+                    } else {
+                        // 未知のデータなら新しく追加
+                        salesLogs.push(data);
+                    }
+                    hasChange = true;
+                } else if (change.type === "removed") {
+                    salesLogs = salesLogs.filter(l => l.id !== data.id);
+                    hasChange = true;
+                }
+            });
+
+            if (hasChange) {
+                // 時間順に並び替え（これ重要です）
+                salesLogs.sort((a, b) => (a.dateStr + a.timeStr).localeCompare(b.dateStr + b.timeStr));
+                // スマホに保存
+                localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
+                updateSalesUI();
+            }
+        });
 }
 
 
