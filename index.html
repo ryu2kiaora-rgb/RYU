@@ -298,8 +298,29 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
+        // --- ID・ユーザー名設定（URL優先モード） ---
+        const urlParams = new URLSearchParams(window.location.search);
+        let MY_ID = urlParams.get('id') || localStorage.getItem('ride_userName');
+
+        if (!MY_ID) {
+            MY_ID = prompt("【初回登録】表示される「名前」を入力してください。\n（※今後、履歴を呼び出す際の鍵になります）");
+            if (MY_ID) {
+                MY_ID = MY_ID.trim();
+                localStorage.setItem('ride_userName', MY_ID);
+            } else {
+                MY_ID = "DRV" + Math.floor(Math.random() * 1000);
+                localStorage.setItem('ride_userName', MY_ID);
+            }
+        }
+
+        // URLにIDが含まれていない場合、アドレスバーにこっそり追加（再読み込みなし）
+        if (MY_ID && !urlParams.has('id')) {
+            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + encodeURIComponent(MY_ID);
+            window.history.replaceState(null, '', newUrl);
+        }
+
         // State
-        let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
+        let user = null, userName = MY_ID, closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
