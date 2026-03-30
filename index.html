@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbzw-xxXSiK6SayHIi5n_yRZh-_NYy2aLXigQhuJJRX_Sy22A70SlKkhEIItHP78XMgJcg/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -544,29 +544,26 @@ window.addEventListener("beforeunload", () => {
 });
 
 
-function listenToSales() {
+async function listenToSales() {
+  try {
+    const res = await fetch(`${GAS_URL}?mode=all`); // 全乗車ログ or 売上ログ取得
+    const data = await res.json();
 
-const path = getPrivatePath('sales')
-if(!path) return
+    // 過去30日分だけフィルター
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    salesLogs = data.filter(log => {
+      const logDate = new Date(log.date); // GASでは date がタイムスタンプで入る
+      return logDate >= thirtyDaysAgo;
+    });
 
-const dateLimit = formatDate(thirtyDaysAgo)
-
-db.collection(path)
-.where('dateStr','>=',dateLimit)
-.onSnapshot(snap=>{
-
-salesLogs = snap.docs.map(doc=>({
-id:doc.id,
-...doc.data()
-}))
-
-updateSalesUI()
-
-})
-
+    updateSalesUI(); // 元コード通りUI更新
+  } catch (e) {
+    console.error("GASから売上取得失敗:", e);
+    salesLogs = [];
+    updateSalesUI();
+  }
 }
 
 
