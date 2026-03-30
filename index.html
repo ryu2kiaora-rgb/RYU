@@ -995,16 +995,14 @@ function getBusinessTimestamp(log){
 
     try{
 
-        const res = await fetch(GAS_URL + "?mode=calendar")
+        const res = await fetch(GAS_URL + "?mode=calendar&uid=" + user.uid)
         const data = await res.json()
 
         calendarData = data.map(d => {
-
             return {
                 ...d,
                 dateStr: d.date.slice(0,10)
             }
-
         })
 
         console.log("calendarData converted",calendarData)
