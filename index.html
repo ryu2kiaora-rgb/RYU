@@ -995,21 +995,25 @@ function getBusinessTimestamp(log){
 
     try{
 
-        const res = await fetch(GAS_URL+"?mode=calendar")
+        const res = await fetch(GAS_URL + "?mode=calendar")
 
         const data = await res.json()
 
-        calendarData = data.map(d=>{
+        calendarData = data.map(d => {
 
             const date = new Date(d.date)
-            date.setHours(date.getHours() + 9)
 
-            return{
+            // 日本時間に変換
+            const jst = new Date(date.getTime() + (9 * 60 * 60 * 1000))
+
+            return {
                 ...d,
-                dateStr: formatDate(date)
+                dateStr: formatDate(jst)
             }
 
         })
+
+        console.log("calendarData converted",calendarData)
 
         updateSalesUI()
 
@@ -1037,6 +1041,8 @@ const hasGas = calendarData.some(d => d.date === ds)
 if (hasFirestore || hasGas) dayEl.classList.add('has-data')
                 dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
                 grid.appendChild(dayEl);
+
+                console.log("calendar check",ds,calendarData)
             }
         }
 
