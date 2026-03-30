@@ -1030,7 +1030,11 @@ function getBusinessTimestamp(log){
 
 const hasGas = calendarData.some(d => d.dateStr === ds)
 
-if (hasFirestore || hasGas) dayEl.classList.add('has-data')
+console.log("check",ds,"gas",hasGas)
+
+if (hasGas){
+    dayEl.classList.add('has-data')
+}
 
 dayEl.innerText = d
 
