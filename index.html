@@ -545,10 +545,12 @@ window.addEventListener("beforeunload", () => {
 
 
 // Firestoreのリードを最小化する高効率・高速同期
+// 583行目付近をこの内容にそっくり入れ替えてください
 function listenToSales() {
   const path = getPrivatePath('sales');
   if (!path) return;
 
+  // 起動時にスマホから読み込み
   const cached = localStorage.getItem('ride_logs_cache');
   if (cached) {
     try {
@@ -570,18 +572,18 @@ function listenToSales() {
         hasChange = true;
         
         if (change.type === "added" || change.type === "modified") {
-          // ★ここが重複防止の肝！
-          // 1. IDが完全に一致するもの、または
-          // 2. 「temp-」で始まり、かつ「金額と時間」が一致するものを探す
+          // ★ 重複チェックの魔法
+          // IDが一致するか、もしくは「temp-」で始まって内容（時間と金額）が同じものを探す
           const idx = salesLogs.findIndex(l => 
             l.id === data.id || 
             (String(l.id).startsWith('temp-') && l.timeStr === data.timeStr && l.amount === data.amount)
           );
 
           if (idx > -1) {
-            salesLogs[idx] = data; // 見つかったら本物のデータ（Firestore版）で上書き
+            // 見つかったら、仮のデータを捨てて「本物のデータ」に差し替える
+            salesLogs[idx] = data; 
           } else {
-            salesLogs.push(data); // 本当に新しいデータなら追加
+            salesLogs.push(data);
           }
         } else if (change.type === "removed") {
           salesLogs = salesLogs.filter(l => l.id !== data.id);
@@ -589,6 +591,7 @@ function listenToSales() {
       });
 
       if (hasChange) {
+        // 保存して画面を更新
         localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
         updateSalesUI();
       }
@@ -850,13 +853,13 @@ logId:editingLogId
     endLng: endPos?.lng || currentLng
   };
 
-  // --- ここで仮のデータを追加 ---
-  const tempId = "temp-" + Date.now(); // 必ず "temp-" を付ける
+ const tempId = "temp-" + Date.now();
   salesLogs.push({ id: tempId, ...data });
   localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
   updateSalesUI();
 
   const path = getPrivatePath('sales');
+  
   if (path) {
     const docRef = await db.collection(path).add(data); // Firestoreへ送信
     sendToGAS(data, docRef.id);
