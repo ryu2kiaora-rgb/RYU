@@ -582,66 +582,46 @@ async function listenToDrivers() {
         if (currentLat === null || currentLng === null) return;
 
         try {
-            const snap = await db.collection(getPublicPath('drivers')).get();
-            let totalOnline = 0;
-            const now = new Date();
+            const fiveMinutesAgo = new Date(Date.now() - 5*60*1000);
 
+            const snap = await db.collection(getPublicPath('drivers'))
+                .where('status', 'in', ['on','occupied'])
+                .where('updatedAt', '>=', firebase.firestore.Timestamp.fromDate(fiveMinutesAgo))
+                .get();
+
+            let totalOnline = 0;
             const activeDrivers = {};
 
-           snap.forEach(doc => {
+            snap.forEach(doc => {
+                const d = doc.data();
+                activeDrivers[doc.id] = true;
+                totalOnline++;
 
+                if (user && doc.id === user.uid) return;
 
-    const d = doc.data();
+                if (map) {
+                    const icon = L.divIcon({
+                        html: createMarkerHtml(d.name, d.status),
+                        className: '',
+                        iconSize: [0, 0]
+                    });
 
-    if (d.lat === undefined || d.lng === undefined) return;
-
-    const age = now - (d.updatedAt?.toDate() || now);
-
-    if (age < 900000) {
-              
-     activeDrivers[doc.id] = true;
-
-        totalOnline++;
-
-        if (user && doc.id === user.uid) return;
-
-
-                    if (map) {
-                        const icon = L.divIcon({
-                            html: createMarkerHtml(d.name, d.status),
-                            className: '',
-                            iconSize: [0, 0]
-                        });
-
-                        if (otherMarkers[doc.id]) {
-                            otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
-                        } else {
-                            otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
-                        }
-                    }
-
-                } else if (age >= 1800000) { // 30分以上経過したら削除
                     if (otherMarkers[doc.id]) {
-                        map.removeLayer(otherMarkers[doc.id]);
-                        delete otherMarkers[doc.id];
+                        otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                    } else {
+                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
                     }
                 }
             });
 
             Object.keys(otherMarkers).forEach(id => {
-
-    if (!activeDrivers[id]) {
-
-        if (map && otherMarkers[id]) {
-            map.removeLayer(otherMarkers[id]);
-        }
-
-        delete otherMarkers[id];
-
-    }
-
-});
-            
+                if (!activeDrivers[id]) {
+                    if (map && otherMarkers[id]) {
+                        map.removeLayer(otherMarkers[id]);
+                    }
+                    delete otherMarkers[id];
+                }
+            });
 
             document.getElementById('online-count').innerText = totalOnline;
 
@@ -650,8 +630,9 @@ async function listenToDrivers() {
         }
     };
 
-    setTimeout(fetchDrivers, 5000); // 最初だけ5秒後
-    driverInterval = setInterval(fetchDrivers, 90000); // 1分半おき
+    setTimeout(fetchDrivers, 5000); // 初回5秒後
+    driverInterval = setInterval(fetchDrivers, 90000); // 90秒ごと
+}
 }
 
 
