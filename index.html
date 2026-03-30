@@ -582,87 +582,68 @@ async function listenToDrivers() {
         if (currentLat === null || currentLng === null) return;
 
         try {
+            const now = new Date();
             // ① 15分前の時刻を計算
-            const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-            // ② 「15分以内に更新した人」だけを取得する条件（where）を追加
+            // ② 「15分以内に更新した人」だけを取得（ここが節約ポイント！）
             const snap = await db.collection(getPublicPath('drivers'))
-                .where('updatedAt', '>', fifteenMinutesAgo) // ←ここを追加！
+                .where('updatedAt', '>', fifteenMinutesAgo)
                 .get();
 
             let totalOnline = 0;
-            const activeIds = new Set();const snap = await db.collection(getPublicPath('drivers')).get();
-            let totalOnline = 0;
-            const now = new Date();
+            const activeDrivers = {}; // 現在アクティブな人のIDを記録
 
-            const activeDrivers = {};
+            snap.forEach(doc => {
+                const d = doc.data();
+                if (d.lat === undefined || d.lng === undefined) return;
 
-           snap.forEach(doc => {
+                // この時点でsnapには15分以内の人しか入っていないので、
+                // 基本的に全員「アクティブ」として処理してOKです
+                activeDrivers[doc.id] = true;
+                totalOnline++;
 
+                // 自分以外を地図に表示
+                if (user && doc.id === user.uid) return;
 
-    const d = doc.data();
+                if (map) {
+                    const icon = L.divIcon({
+                        html: createMarkerHtml(d.name, d.status),
+                        className: '',
+                        iconSize: [0, 0]
+                    });
 
-    if (d.lat === undefined || d.lng === undefined) return;
-
-    const age = now - (d.updatedAt?.toDate() || now);
-
-    if (age < 900000) {
-              
-     activeDrivers[doc.id] = true;
-
-        totalOnline++;
-
-        if (user && doc.id === user.uid) return;
-
-
-                    if (map) {
-                        const icon = L.divIcon({
-                            html: createMarkerHtml(d.name, d.status),
-                            className: '',
-                            iconSize: [0, 0]
-                        });
-
-                        if (otherMarkers[doc.id]) {
-                            otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
-                        } else {
-                            otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
-                        }
-                    }
-
-                } else if (age >= 1800000) { // 30分以上経過したら削除
                     if (otherMarkers[doc.id]) {
-                        map.removeLayer(otherMarkers[doc.id]);
-                        delete otherMarkers[doc.id];
+                        otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                    } else {
+                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
                     }
                 }
             });
 
+            // ③ 15分以上更新がない（今回のsnapに含まれなかった）人を地図から消去
             Object.keys(otherMarkers).forEach(id => {
+                if (!activeDrivers[id]) {
+                    if (map && otherMarkers[id]) {
+                        map.removeLayer(otherMarkers[id]);
+                    }
+                    delete otherMarkers[id];
+                }
+            });
 
-    if (!activeDrivers[id]) {
-
-        if (map && otherMarkers[id]) {
-            map.removeLayer(otherMarkers[id]);
-        }
-
-        delete otherMarkers[id];
-
-    }
-
-});
-            
-
-            document.getElementById('online-count').innerText = totalOnline;
+            // オンライン人数の更新
+            const countEl = document.getElementById('online-count');
+            if (countEl) countEl.innerText = totalOnline;
 
         } catch (e) {
             console.log("driver read error", e);
         }
     };
 
-    setTimeout(fetchDrivers, 5000); // 最初だけ5秒後
-    driverInterval = setInterval(fetchDrivers, 90000); // 1分半おき
+    // 初回実行を5秒後に、その後1.5分おきに更新
+    setTimeout(fetchDrivers, 5000);
+    driverInterval = setInterval(fetchDrivers, 90000);
 }
-
 
 
         function updateSalesUI() {
