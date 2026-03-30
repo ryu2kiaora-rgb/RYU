@@ -571,9 +571,9 @@ function listenToSales() {
         } catch (e) { console.error("Cache error", e); }
     }
 
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const dateLimit = formatDate(thirtyDaysAgo);
+    const limitDate = new Date();
+limitDate.setDate(limitDate.getDate() - 1); // 1 に書き換え
+const dateLimit = formatDate(limitDate);
 
     // 2. Firestoreに接続（差分監視モード）
     db.collection(path)
