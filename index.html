@@ -367,17 +367,10 @@ async function initApp() {
     auth.onAuthStateChanged(async (u) => {
         if (u) {
             user = u;
-            
-            // --- 修正：二重起動を防止する ---
-            if (!window.appInitialized) {
-                initMap();
-                initNumpad();
-                listenToSales();
-                listenToDrivers();
-                window.appInitialized = true; // 「初期化済み」の旗を立てる
-            }
-            // -----------------------------
-
+            initMap();
+            initNumpad();
+            listenToSales();
+            listenToDrivers();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
                 updateNameDisplay();
@@ -385,9 +378,7 @@ async function initApp() {
             } else {
                 document.getElementById('registration-ui').classList.remove('hidden');
             }
-        } else { 
-            await auth.signInAnonymously(); 
-        }
+        } else { await auth.signInAnonymously(); }
     });
 }
 
@@ -553,70 +544,29 @@ window.addEventListener("beforeunload", () => {
 });
 
 
-// Firestoreのリードを最小化する高効率・高速同期
 function listenToSales() {
-    const path = getPrivatePath('sales');
-    if (!path) return;
 
-    // 二重起動防止
-    if (window.isListeningSales) return;
-    window.isListeningSales = true;
+const path = getPrivatePath('sales')
+if(!path) return
 
-    // 1. まずスマホの「引き出し」から読み込む
-    const cached = localStorage.getItem('ride_logs_cache');
-    if (cached) {
-        try {
-            salesLogs = JSON.parse(cached);
-            updateSalesUI(); // ネットを待たずに即表示
-        } catch (e) { console.error("Cache error", e); }
-    }
+const thirtyDaysAgo = new Date()
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const limitDate = new Date();
-limitDate.setDate(limitDate.getDate() - 1); // 1 に書き換え
-const dateLimit = formatDate(limitDate);
+const dateLimit = formatDate(thirtyDaysAgo)
 
-    // 2. Firestoreに接続（差分監視モード）
-    db.collection(path)
-        .where('dateStr', '>=', dateLimit)
-        .onSnapshot(snap => {
-            let hasChange = false;
+db.collection(path)
+.where('dateStr','>=',dateLimit)
+.onSnapshot(snap=>{
 
-            snap.docChanges().forEach(change => {
-                const data = { id: change.doc.id, ...change.doc.data() };
-                
-                if (change.type === "added" || change.type === "modified") {
-                    // ★【重複防止の要】
-                    // 「IDが一致」または「temp-で始まり、中身（時間・金額・日付）が一致」するものを探す
-                    const idx = salesLogs.findIndex(l => 
-                        l.id === data.id || 
-                        (String(l.id).startsWith('temp-') && 
-                         l.timeStr === data.timeStr && 
-                         l.amount === data.amount && 
-                         l.dateStr === data.dateStr)
-                    );
+salesLogs = snap.docs.map(doc=>({
+id:doc.id,
+...doc.data()
+}))
 
-                    if (idx > -1) {
-                        // 重複が見つかったら、古いデータ（仮データなど）を最新版（Firestore版）で上書き
-                        salesLogs[idx] = data;
-                    } else {
-                        // 未知のデータなら新しく追加
-                        salesLogs.push(data);
-                    }
-                    hasChange = true;
-                } else if (change.type === "removed") {
-                    salesLogs = salesLogs.filter(l => l.id !== data.id);
-                    hasChange = true;
-                }
-            });
+updateSalesUI()
 
-            if (hasChange) {
-                // 時間順に並び替え（これ重要です）
-                salesLogs.sort((a, b) => (a.dateStr + a.timeStr).localeCompare(b.dateStr + b.timeStr));
-                // スマホに保存
-                localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
-                updateSalesUI();
-            }
-        });
+})
+
 }
 
 
@@ -856,41 +806,31 @@ logId:editingLogId
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
-  const amount = parseInt(currentInputAmount) || 0;
-  if (amount <= 0) return;
+            const amount = parseInt(currentInputAmount) || 0;
+            if (amount <= 0) return;
+            const now = new Date();
+            const data = { 
+                amount, dateStr: getBusinessDate(now), 
+                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+                pickupTime: Number(localStorage.getItem("rideStart")),
+                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+                userName: userName,
+                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+            };
+            const path = getPrivatePath('sales');
+            if (path) {
+                const docRef = await db.collection(path).add(data);
+                sendToGAS(data,docRef.id)
+                localStorage.removeItem("rideStart");
+rideStartTimestamp = null;
+                //refreshRanking(); // 売上が増えたのでランキングを再取得
+            }
+            document.getElementById('modal-payment').classList.add('hidden');
+            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
+        };
 
-  const now = new Date();
-  const data = {
-    amount,
-    dateStr: getBusinessDate(now),
-    timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    pickupTime: Number(localStorage.getItem("rideStart")) || Date.now(),
-    userName: userName,
-    lat: startPos?.lat || currentLat,
-    lng: startPos?.lng || currentLng,
-    startLat: startPos?.lat || currentLat,
-    startLng: startPos?.lng || currentLng,
-    endLat: endPos?.lat || currentLat,
-    endLng: endPos?.lng || currentLng
-  };
-
- const tempId = "temp-" + Date.now();
-  salesLogs.push({ id: tempId, ...data });
-  localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
-  updateSalesUI();
-
-  const path = getPrivatePath('sales');
-  
-  if (path) {
-    const docRef = await db.collection(path).add(data); // Firestoreへ送信
-    sendToGAS(data, docRef.id);
-    localStorage.removeItem("rideStart");
-  }
-
-  document.getElementById('modal-payment').classList.add('hidden');
-  currentInputAmount = "";
-  document.getElementById('input-display').innerText = "¥ 0";
-};
         // Utility UI Helpers
 
 
