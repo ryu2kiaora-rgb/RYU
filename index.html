@@ -579,18 +579,21 @@ async function listenToDrivers() {
     if (driverInterval) return;
 
     const fetchDrivers = async () => {
-        //if (currentLat === null || currentLng === null) return;
+    console.log("--- 15分フィルタ実行開始 ---"); // ログ1
+    const path = getPublicPath('drivers');
+    console.log("読み込みパス:", path); // ログ2
 
-        try {
-            const now = new Date();
-            // ① 15分前の時刻を計算
-            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+    try {
+        const now = new Date();
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-            // ② 「15分以内に更新した人」だけを取得（ここが節約ポイント！）
-            const snap = await db.collection('drivers') // もしトップ階層にあるならこれ
-    .where('updatedAt', '>', fifteenMinutesAgo)
-    .get();
+        console.log("Firestoreにクエリを送信します..."); // ログ3
+        const snap = await db.collection(path)
+            .where('updatedAt', '>', fifteenMinutesAgo)
+            .get();
 
+        console.log("データ取得に成功しました！ 件数:", snap.size); // ログ4
+        
             let totalOnline = 0;
             const activeDrivers = {}; // 現在アクティブな人のIDを記録
 
