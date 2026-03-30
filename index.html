@@ -1036,7 +1036,12 @@ function getBusinessTimestamp(log){
                 const dayEl = document.createElement('div');
                 dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
                 const hasFirestore = salesLogs.some(l => l.dateStr === ds)
-const hasGas = calendarData.some(d => d.date === ds)
+
+const hasGas = calendarData.some(d => {
+    const date = new Date(d.date)
+    const jst = new Date(date.getTime() + 9*60*60*1000)
+    return formatDate(jst) === ds
+})
 
 if (hasFirestore || hasGas) dayEl.classList.add('has-data')
                 dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
