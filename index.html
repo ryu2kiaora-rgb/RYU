@@ -544,29 +544,51 @@ window.addEventListener("beforeunload", () => {
 });
 
 
+// Firestoreのリードを最小化する高効率・高速同期
 function listenToSales() {
+    const path = getPrivatePath('sales');
+    if (!path) return;
 
-const path = getPrivatePath('sales')
-if(!path) return
+    // 1. 【高速表示】まずはローカルストレージ（スマホ内）のデータを表示
+    const cachedData = localStorage.getItem('ride_logs_cache');
+    if (cachedData) {
+        salesLogs = JSON.parse(cachedData);
+        updateSalesUI();
+    }
 
-const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 2. 【差分読込】Firestoreのリスナー開始
+    // onSnapshotは、初回以降は「変更があったデータ」しか通信しません
+    db.collection(path).onSnapshot(snapshot => {
+        let isChanged = false;
 
-const dateLimit = formatDate(thirtyDaysAgo)
+        snapshot.docChanges().forEach(change => {
+            const data = { id: change.doc.id, ...change.doc.data() };
+            isChanged = true;
 
-db.collection(path)
-.where('dateStr','>=',dateLimit)
-.onSnapshot(snap=>{
+            if (change.type === "added" || change.type === "modified") {
+                // 既存のデータにあれば上書き、なければ追加
+                const index = salesLogs.findIndex(l => l.id === data.id);
+                if (index > -1) {
+                    salesLogs[index] = data;
+                } else {
+                    salesLogs.push(data);
+                }
+            } else if (change.type === "removed") {
+                // 削除された場合
+                salesLogs = salesLogs.filter(l => l.id !== data.id);
+            }
+        });
 
-salesLogs = snap.docs.map(doc=>({
-id:doc.id,
-...doc.data()
-}))
-
-updateSalesUI()
-
-})
-
+        // 変化があった場合のみ、スマホに保存して画面を更新
+        if (isChanged) {
+            // 重複を防ぎつつ最新化されたsalesLogsを保存
+            localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
+            updateSalesUI();
+            console.log("Firestoreから差分を同期しました");
+        }
+    }, err => {
+        console.error("Listen error:", err);
+    });
 }
 
 
@@ -806,31 +828,40 @@ logId:editingLogId
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
-            const amount = parseInt(currentInputAmount) || 0;
-            if (amount <= 0) return;
-            const now = new Date();
-            const data = { 
-                amount, dateStr: getBusinessDate(now), 
-                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-                pickupTime: Number(localStorage.getItem("rideStart")),
-                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-                userName: userName,
-                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
-                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
-                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
-            };
-            const path = getPrivatePath('sales');
-            if (path) {
-                const docRef = await db.collection(path).add(data);
-                sendToGAS(data,docRef.id)
-                localStorage.removeItem("rideStart");
-rideStartTimestamp = null;
-                //refreshRanking(); // 売上が増えたのでランキングを再取得
-            }
-            document.getElementById('modal-payment').classList.add('hidden');
-            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
-        };
+    const amount = parseInt(currentInputAmount) || 0;
+    if (amount <= 0) return;
 
+    const now = new Date();
+    const logId = "L" + Date.now(); // 一時的なID
+
+    const data = { 
+        amount, 
+        dateStr: getBusinessDate(now), 
+        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+        pickupTime: Number(localStorage.getItem("rideStart")) || Date.now(),
+        userName: userName,
+        lat: startPos?.lat || currentLat, 
+        lng: startPos?.lng || currentLng,
+        startLat: startPos?.lat || currentLat, 
+        startLng: startPos?.lng || currentLng,
+        endLat: endPos?.lat || currentLat, 
+        endLng: endPos?.lng || currentLng
+    };
+
+    // 1. Firestoreへ書き込み（これで自動的にGASへも送られ、他デバイスへも同期される）
+    const path = getPrivatePath('sales');
+    if (path) {
+        const docRef = await db.collection(path).add(data);
+        // GASへの送信（既存の関数を利用）
+        sendToGAS(data, docRef.id);
+    }
+
+    // 2. 状態リセット
+    document.getElementById('modal-payment').classList.add('hidden');
+    currentInputAmount = ""; 
+    document.getElementById('input-display').innerText = "¥ 0";
+    localStorage.removeItem("rideStart");
+};
         // Utility UI Helpers
 
 
