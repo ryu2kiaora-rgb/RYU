@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbws9l4mv4K9opHD8KluFCEtB0VZAeEfnWOBLE12J9KoFN44Kqi_1sL8LBtjiDkydwMN-g/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -304,7 +304,6 @@
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
-        let calendarData = [];
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
         let driverStatus = "on";
@@ -372,7 +371,6 @@ async function initApp() {
             initNumpad();
             listenToSales();
             listenToDrivers();
-            loadCalendarData();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
                 updateNameDisplay();
@@ -551,10 +549,13 @@ function listenToSales() {
 const path = getPrivatePath('sales')
 if(!path) return
 
-const today = getBusinessDate(new Date())
+const thirtyDaysAgo = new Date()
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+const dateLimit = formatDate(thirtyDaysAgo)
 
 db.collection(path)
-.where('dateStr','==',today)
+.where('dateStr','>=',dateLimit)
 .onSnapshot(snap=>{
 
 salesLogs = snap.docs.map(doc=>({
@@ -991,29 +992,6 @@ function getBusinessTimestamp(log){
             });
         }
 
-        async function loadCalendarData(){
-
-    try{
-
-        const res = await fetch(GAS_URL + "?mode=calendar&uid=" + user.uid)
-        const data = await res.json()
-
-        calendarData = data.map(d => {
-            return {
-                ...d,
-                dateStr: d.date.slice(0,10)
-            }
-        })
-
-        console.log("calendarData converted",calendarData)
-
-        updateSalesUI()
-
-    }catch(e){
-        console.error(e)
-    }
-}
-
         function renderCalendar() {
             const grid = document.getElementById('calendar-grid'); if (!grid) return;
             grid.innerHTML = ""; const year = currentViewDate.getFullYear(), month = currentViewDate.getMonth();
@@ -1024,27 +1002,9 @@ function getBusinessTimestamp(log){
                 const ds = formatDate(new Date(year, month, d));
                 const dayEl = document.createElement('div');
                 dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
-                const hasFirestore = salesLogs.some(l => l.dateStr === ds)
-
-const hasGas = calendarData.some(d => d.dateStr === ds)
-
-console.log("check",ds,"gas",hasGas)
-
-if (hasGas){
-    dayEl.classList.add('has-data')
-}
-
-dayEl.innerText = d
-
-dayEl.onclick = () => {
-    selectedDateStr = ds
-    renderCalendar()
-    showDailyDetail(ds)
-}
-
-grid.appendChild(dayEl)
-
-console.log("calendar check", ds, calendarData)
+                if (salesLogs.some(l => l.dateStr === ds)) dayEl.classList.add('has-data');
+                dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
+                grid.appendChild(dayEl);
             }
         }
 
