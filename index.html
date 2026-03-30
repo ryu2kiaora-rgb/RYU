@@ -587,9 +587,9 @@ async function listenToDrivers() {
             const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
             // ② 「15分以内に更新した人」だけを取得（ここが節約ポイント！）
-            const snap = await db.collection(getPublicPath('drivers'))
-                .where('updatedAt', '>', fifteenMinutesAgo)
-                .get();
+            const snap = await db.collection('drivers') // もしトップ階層にあるならこれ
+    .where('updatedAt', '>', fifteenMinutesAgo)
+    .get();
 
             let totalOnline = 0;
             const activeDrivers = {}; // 現在アクティブな人のIDを記録
