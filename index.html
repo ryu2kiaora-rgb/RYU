@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbzzxaqQfO-y0lnI39PEHnW5RD5qHyVIPqtVkcI2AjGcwTM4N6hCWWs2_CeWJ4QGTz4w5w/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -304,6 +304,7 @@
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
+        let calendarData = [];
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
         let driverStatus = "on";
@@ -371,6 +372,7 @@ async function initApp() {
             initNumpad();
             listenToSales();
             listenToDrivers();
+            loadCalendarData();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
                 updateNameDisplay();
@@ -549,13 +551,10 @@ function listenToSales() {
 const path = getPrivatePath('sales')
 if(!path) return
 
-const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-const dateLimit = formatDate(thirtyDaysAgo)
+const today = getBusinessDate(new Date())
 
 db.collection(path)
-.where('dateStr','>=',dateLimit)
+.where('dateStr','==',today)
 .onSnapshot(snap=>{
 
 salesLogs = snap.docs.map(doc=>({
@@ -991,6 +990,24 @@ function getBusinessTimestamp(log){
                 container.appendChild(btn);
             });
         }
+
+        async function loadCalendarData(){
+
+    try{
+
+        const res = await fetch(GAS_URL+"?mode=calendar")
+
+        calendarData = await res.json()
+
+        updateSalesUI()
+
+    }catch(e){
+
+        console.log("calendar load error",e)
+
+    }
+
+}
 
         function renderCalendar() {
             const grid = document.getElementById('calendar-grid'); if (!grid) return;
