@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwtP23Q7elej4giSXQZ3pmyuy3LAjRjNlxhfy3sysnk376zodWZYAyzwaSrMDLCxEpHXA/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -369,8 +369,7 @@ async function initApp() {
             user = u;
             initMap();
             initNumpad();
-            //listenToSales();
-            loadSalesFromGAS(); // GASからデータを取得
+            listenToSales();
             listenToDrivers();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
@@ -545,33 +544,29 @@ window.addEventListener("beforeunload", () => {
 });
 
 
-async function loadSalesFromGAS() {
-    try {
-        const lastSync = localStorage.getItem('lastSalesSync') || '';
-        const res = await fetch(`${GAS_URL}?mode=get&since=${lastSync}&driverId=${user.uid}`);
-        const data = await res.json();  // GAS側で { logs: [...], lastUpdate: '...' } を返す
-        if(!data.logs) return;
+function listenToSales() {
 
-        // キャッシュに保存
-        const cachedLogs = JSON.parse(localStorage.getItem('salesLogs') || '[]');
-        const mergedLogs = [...cachedLogs];
+const path = getPrivatePath('sales')
+if(!path) return
 
-        // 新しいデータだけ追加
-        data.logs.forEach(log=>{
-            if(!cachedLogs.find(l=>l.logId===log.logId)){
-                mergedLogs.push(log);
-            }
-        });
+const thirtyDaysAgo = new Date()
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-        salesLogs = mergedLogs;
-        localStorage.setItem('salesLogs', JSON.stringify(mergedLogs));
-        localStorage.setItem('lastSalesSync', data.lastUpdate);
+const dateLimit = formatDate(thirtyDaysAgo)
 
-        updateSalesUI();
+db.collection(path)
+.where('dateStr','>=',dateLimit)
+.onSnapshot(snap=>{
 
-    } catch(e){
-        console.error("GAS sales load error", e);
-    }
+salesLogs = snap.docs.map(doc=>({
+id:doc.id,
+...doc.data()
+}))
+
+updateSalesUI()
+
+})
+
 }
 
 
