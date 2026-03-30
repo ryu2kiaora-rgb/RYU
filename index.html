@@ -1000,23 +1000,20 @@ function getBusinessTimestamp(log){
 
         calendarData = data.map(d => {
 
-            const businessDate = getBusinessDate(new Date(d.date))
-
             return {
                 ...d,
-                dateStr: businessDate
+                dateStr: d.date.slice(0,10)
             }
 
         })
 
-        console.log("calendarData converted", calendarData)
+        console.log("calendarData converted",calendarData)
 
         updateSalesUI()
 
     }catch(e){
-        console.error("calendar load error",e)
+        console.error(e)
     }
-
 }
 
         function renderCalendar() {
