@@ -582,7 +582,16 @@ async function listenToDrivers() {
         if (currentLat === null || currentLng === null) return;
 
         try {
-            const snap = await db.collection(getPublicPath('drivers')).get();
+            // ① 15分前の時刻を計算
+            const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+
+            // ② 「15分以内に更新した人」だけを取得する条件（where）を追加
+            const snap = await db.collection(getPublicPath('drivers'))
+                .where('updatedAt', '>', fifteenMinutesAgo) // ←ここを追加！
+                .get();
+
+            let totalOnline = 0;
+            const activeIds = new Set();const snap = await db.collection(getPublicPath('drivers')).get();
             let totalOnline = 0;
             const now = new Date();
 
