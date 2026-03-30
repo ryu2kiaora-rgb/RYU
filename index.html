@@ -554,6 +554,8 @@ function listenToSales() {
   if (cached) {
     try {
       salesLogs = JSON.parse(cached);
+        // これを書き足す
+alert("ストレージから " + salesLogs.length + " 件読み込みました！");
       updateSalesUI(); // ネット通信を待たずに即座に表示
       console.log("LocalStorageから読み込み完了:", salesLogs.length, "件");
     } catch (e) { console.error("Cache read error", e); }
