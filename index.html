@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycby0oFXD-j194PbIdHn7AC5VVh-U-eN5uiPP9c8HUv6Fs1PSyoKJX4_5ocMBlAheHISs-Q/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -544,29 +544,29 @@ window.addEventListener("beforeunload", () => {
 });
 
 
-async function listenToSales() {
-  try {
-    const res = await fetch(`${GAS_URL}?mode=all`);
-    const data = await res.json();
+function listenToSales() {
 
-    console.log("GASから取得データ", data);
+const path = getPrivatePath('sales')
+if(!path) return
 
-    // 過去30日分だけ抽出
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+const thirtyDaysAgo = new Date()
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    salesLogs = data.filter(log => {
-      const logDate = new Date(log.date);
-      if(isNaN(logDate)) console.warn("Invalid Date", log.date);
-      return logDate >= thirtyDaysAgo;
-    });
+const dateLimit = formatDate(thirtyDaysAgo)
 
-    updateSalesUI();
-  } catch(e){
-    console.error("GASから売上取得失敗:", e);
-    salesLogs = [];
-    updateSalesUI();
-  }
+db.collection(path)
+.where('dateStr','>=',dateLimit)
+.onSnapshot(snap=>{
+
+salesLogs = snap.docs.map(doc=>({
+id:doc.id,
+...doc.data()
+}))
+
+updateSalesUI()
+
+})
+
 }
 
 
