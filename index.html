@@ -549,15 +549,11 @@ function listenToSales() {
   const path = getPrivatePath('sales');
   if (!path) return;
 
-  // --- 【追加】起動時にまずスマホの保存領域から読み出す ---
   const cached = localStorage.getItem('ride_logs_cache');
   if (cached) {
     try {
       salesLogs = JSON.parse(cached);
-        // これを書き足す
-//alert("ストレージから " + salesLogs.length + " 件読み込みました！");
-      updateSalesUI(); // ネット通信を待たずに即座に表示
-      console.log("LocalStorageから読み込み完了:", salesLogs.length, "件");
+      updateSalesUI();
     } catch (e) { console.error("Cache read error", e); }
   }
 
@@ -565,7 +561,6 @@ function listenToSales() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const dateLimit = formatDate(thirtyDaysAgo);
 
-  // Firestoreの監視（ここから先は差分だけが通信されます）
   db.collection(path)
     .where('dateStr', '>=', dateLimit)
     .onSnapshot(snap => {
@@ -575,14 +570,16 @@ function listenToSales() {
         hasChange = true;
         
         if (change.type === "added" || change.type === "modified") {
-          // ★ここを強化：IDだけでなく、時間や金額が全く同じ「仮データ」があれば上書きする
+          // ★ここが重複防止の肝！
+          // 1. IDが完全に一致するもの、または
+          // 2. 「temp-」で始まり、かつ「金額と時間」が一致するものを探す
           const idx = salesLogs.findIndex(l => 
             l.id === data.id || 
-            (l.id.startsWith('temp-') && l.timeStr === data.timeStr && l.amount === data.amount)
+            (String(l.id).startsWith('temp-') && l.timeStr === data.timeStr && l.amount === data.amount)
           );
-          
+
           if (idx > -1) {
-            salesLogs[idx] = data; // 仮データを本物データに差し替える
+            salesLogs[idx] = data; // 見つかったら本物のデータ（Firestore版）で上書き
           } else {
             salesLogs.push(data); // 本当に新しいデータなら追加
           }
@@ -592,7 +589,6 @@ function listenToSales() {
       });
 
       if (hasChange) {
-        // --- 【重要】Firestoreと同期したらスマホに保存する ---
         localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
         updateSalesUI();
       }
@@ -854,28 +850,19 @@ logId:editingLogId
     endLng: endPos?.lng || currentLng
   };
 
-  // --- 【追加】Firestoreへの送信を待たずに、手元のスマホ保存を更新 ---
-  // これにより「保存中...」の待ち時間がなくなり、サクサク動きます
-  salesLogs.push({ id: "temp-" + Date.now(), ...data });
+  // --- ここで仮のデータを追加 ---
+  const tempId = "temp-" + Date.now(); // 必ず "temp-" を付ける
+  salesLogs.push({ id: tempId, ...data });
   localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
   updateSalesUI();
 
-            // --- ここから追加・修正 ---
-  // Firestoreに送る前に、手元の「メモリ」と「スマホの引き出し」を先に更新する
-  const tempId = "temp-" + Date.now(); 
-  salesLogs.push({ id: tempId, ...data }); 
-  localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
-  updateSalesUI(); // 即座に画面を書き換える
-  // --- ここまで追加 ---
-
   const path = getPrivatePath('sales');
   if (path) {
-    const docRef = await db.collection(path).add(data);
+    const docRef = await db.collection(path).add(data); // Firestoreへ送信
     sendToGAS(data, docRef.id);
     localStorage.removeItem("rideStart");
   }
 
-  // モーダルを閉じてリセット
   document.getElementById('modal-payment').classList.add('hidden');
   currentInputAmount = "";
   document.getElementById('input-display').innerText = "¥ 0";
