@@ -997,9 +997,19 @@ function getBusinessTimestamp(log){
 
         const res = await fetch(GAS_URL+"?mode=calendar")
 
-        calendarData = await res.json()
+        const data = await res.json()
 
-        console.log("GAS calendarData",calendarData)
+        calendarData = data.map(d=>{
+
+            const date = new Date(d.date)
+            date.setHours(date.getHours() + 9)
+
+            return{
+                ...d,
+                dateStr: formatDate(date)
+            }
+
+        })
 
         updateSalesUI()
 
