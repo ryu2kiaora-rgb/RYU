@@ -546,48 +546,45 @@ window.addEventListener("beforeunload", () => {
 
 // Firestoreのリードを最小化する高効率・高速同期
 function listenToSales() {
-    const path = getPrivatePath('sales');
-    if (!path) return;
+  const path = getPrivatePath('sales');
+  if (!path) return;
 
-    // 1. 【高速表示】まずはローカルストレージ（スマホ内）のデータを表示
-    const cachedData = localStorage.getItem('ride_logs_cache');
-    if (cachedData) {
-        salesLogs = JSON.parse(cachedData);
-        updateSalesUI();
-    }
+  // --- 【追加】起動時にまずスマホの保存領域から読み出す ---
+  const cached = localStorage.getItem('ride_logs_cache');
+  if (cached) {
+    try {
+      salesLogs = JSON.parse(cached);
+      updateSalesUI(); // ネット通信を待たずに即座に表示
+      console.log("LocalStorageから読み込み完了:", salesLogs.length, "件");
+    } catch (e) { console.error("Cache read error", e); }
+  }
 
-    // 2. 【差分読込】Firestoreのリスナー開始
-    // onSnapshotは、初回以降は「変更があったデータ」しか通信しません
-    db.collection(path).onSnapshot(snapshot => {
-        let isChanged = false;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const dateLimit = formatDate(thirtyDaysAgo);
 
-        snapshot.docChanges().forEach(change => {
-            const data = { id: change.doc.id, ...change.doc.data() };
-            isChanged = true;
-
-            if (change.type === "added" || change.type === "modified") {
-                // 既存のデータにあれば上書き、なければ追加
-                const index = salesLogs.findIndex(l => l.id === data.id);
-                if (index > -1) {
-                    salesLogs[index] = data;
-                } else {
-                    salesLogs.push(data);
-                }
-            } else if (change.type === "removed") {
-                // 削除された場合
-                salesLogs = salesLogs.filter(l => l.id !== data.id);
-            }
-        });
-
-        // 変化があった場合のみ、スマホに保存して画面を更新
-        if (isChanged) {
-            // 重複を防ぎつつ最新化されたsalesLogsを保存
-            localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
-            updateSalesUI();
-            console.log("Firestoreから差分を同期しました");
+  // Firestoreの監視（ここから先は差分だけが通信されます）
+  db.collection(path)
+    .where('dateStr', '>=', dateLimit)
+    .onSnapshot(snap => {
+      let hasChange = false;
+      snap.docChanges().forEach(change => {
+        const data = { id: change.doc.id, ...change.doc.data() };
+        hasChange = true;
+        if (change.type === "added" || change.type === "modified") {
+          const idx = salesLogs.findIndex(l => l.id === data.id);
+          if (idx > -1) salesLogs[idx] = data;
+          else salesLogs.push(data);
+        } else if (change.type === "removed") {
+          salesLogs = salesLogs.filter(l => l.id !== data.id);
         }
-    }, err => {
-        console.error("Listen error:", err);
+      });
+
+      if (hasChange) {
+        // --- 【重要】Firestoreと同期したらスマホに保存する ---
+        localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
+        updateSalesUI();
+      }
     });
 }
 
@@ -828,39 +825,41 @@ logId:editingLogId
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
-    const amount = parseInt(currentInputAmount) || 0;
-    if (amount <= 0) return;
+  const amount = parseInt(currentInputAmount) || 0;
+  if (amount <= 0) return;
 
-    const now = new Date();
-    const logId = "L" + Date.now(); // 一時的なID
+  const now = new Date();
+  const data = {
+    amount,
+    dateStr: getBusinessDate(now),
+    timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    pickupTime: Number(localStorage.getItem("rideStart")) || Date.now(),
+    userName: userName,
+    lat: startPos?.lat || currentLat,
+    lng: startPos?.lng || currentLng,
+    startLat: startPos?.lat || currentLat,
+    startLng: startPos?.lng || currentLng,
+    endLat: endPos?.lat || currentLat,
+    endLng: endPos?.lng || currentLng
+  };
 
-    const data = { 
-        amount, 
-        dateStr: getBusinessDate(now), 
-        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-        pickupTime: Number(localStorage.getItem("rideStart")) || Date.now(),
-        userName: userName,
-        lat: startPos?.lat || currentLat, 
-        lng: startPos?.lng || currentLng,
-        startLat: startPos?.lat || currentLat, 
-        startLng: startPos?.lng || currentLng,
-        endLat: endPos?.lat || currentLat, 
-        endLng: endPos?.lng || currentLng
-    };
+  // --- 【追加】Firestoreへの送信を待たずに、手元のスマホ保存を更新 ---
+  // これにより「保存中...」の待ち時間がなくなり、サクサク動きます
+  salesLogs.push({ id: "temp-" + Date.now(), ...data });
+  localStorage.setItem('ride_logs_cache', JSON.stringify(salesLogs));
+  updateSalesUI();
 
-    // 1. Firestoreへ書き込み（これで自動的にGASへも送られ、他デバイスへも同期される）
-    const path = getPrivatePath('sales');
-    if (path) {
-        const docRef = await db.collection(path).add(data);
-        // GASへの送信（既存の関数を利用）
-        sendToGAS(data, docRef.id);
-    }
-
-    // 2. 状態リセット
-    document.getElementById('modal-payment').classList.add('hidden');
-    currentInputAmount = ""; 
-    document.getElementById('input-display').innerText = "¥ 0";
+  const path = getPrivatePath('sales');
+  if (path) {
+    const docRef = await db.collection(path).add(data);
+    sendToGAS(data, docRef.id);
     localStorage.removeItem("rideStart");
+  }
+
+  // モーダルを閉じてリセット
+  document.getElementById('modal-payment').classList.add('hidden');
+  currentInputAmount = "";
+  document.getElementById('input-display').innerText = "¥ 0";
 };
         // Utility UI Helpers
 
