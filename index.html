@@ -1226,7 +1226,6 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 
     // 2. 監視系の停止
     if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
-if (driverInterval) { clearInterval(driverInterval); driverInterval = null; }
 if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
     // 3. Firestore削除処理（エラーをキャッチして処理を止めない）
@@ -1252,6 +1251,7 @@ if (watchId) { navigator.geolocation.clearWatch(watchId); watchId = null; }
 
     // 5. オーバーレイ（開始画面）への復帰
     document.getElementById("shift-overlay").style.display = "flex";
+    document.getElementById("online-count").innerText = "0";
 };
         // 追加（UIリセット）
 document.getElementById("online-count").innerText = "0";
