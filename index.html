@@ -1019,7 +1019,10 @@ function getBusinessTimestamp(log){
                 const ds = formatDate(new Date(year, month, d));
                 const dayEl = document.createElement('div');
                 dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
-                if (salesLogs.some(l => l.dateStr === ds)) dayEl.classList.add('has-data');
+                const hasFirestore = salesLogs.some(l => l.dateStr === ds)
+const hasGas = calendarData.some(d => d.date === ds)
+
+if (hasFirestore || hasGas) dayEl.classList.add('has-data')
                 dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
                 grid.appendChild(dayEl);
             }
