@@ -144,6 +144,12 @@
     <div class="p-4 pb-24">
         
         <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg mb-4 text-white">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex flex-col">
+                    <h3 class="text-xs font-bold text-blue-300 uppercase tracking-widest">期間サマリー</h3>
+                    <p id="period-range-text" class="text-[9px] text-slate-400 mt-0.5 tracking-tighter">読み込み中...</p>
+                </div>
+            </div>
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <p class="text-[9px] text-slate-400 font-bold uppercase">期間合計売上</p>
@@ -154,7 +160,6 @@
                     <p id="month-total-count" class="text-2xl font-black">0件</p>
                 </div>
             </div>
-            <p id="period-range-text" class="text-[9px] text-slate-400 mt-2 tracking-tighter"></p>
         </div>
 
         <div class="bg-white rounded-2xl shadow-sm mb-4 border border-slate-100 overflow-hidden" style="height: 450px;">
@@ -165,25 +170,29 @@
             ></iframe>
         </div>
 
-        <div style="display:none !important;">
-            <div id="month-calendar"></div>
-            <div id="calendar-grid"></div>
-            <div id="current-month"></div> 
+        <div id="month-calendar" style="display: none !important;">
+            <div class="flex justify-between items-center mb-4">
+                <button id="prev-month" class="p-2">＜</button>
+                <h4 id="current-month" class="font-bold"></h4>
+                <button id="next-month" class="p-2">＞</button>
+            </div>
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1">
+                </div>
         </div>
 
-        <div id="today-summary-section" class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
+        <div id="today-summary-section" class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4 mt-4">
             <h5 id="summary-date-label" class="text-[10px] font-bold text-blue-500 uppercase mb-2">選択日の概要</h5>
             <div class="grid grid-cols-3 gap-2 text-center">
-                <div class="bg-white p-2 rounded-xl shadow-sm">
-                    <p class="text-[8px] text-gray-400">合計</p>
+                <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                    <p class="text-[8px] text-gray-400">合計売上</p>
                     <p id="footer-daily-total" class="text-xs font-black text-slate-800">¥0</p>
                 </div>
-                <div class="bg-white p-2 rounded-xl shadow-sm">
-                    <p class="text-[8px] text-gray-400">回数</p>
+                <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                    <p class="text-[8px] text-gray-400">完了回数</p>
                     <p id="footer-daily-count" class="text-xs font-black text-slate-800">0回</p>
                 </div>
-                <div class="bg-white p-2 rounded-xl shadow-sm">
-                    <p class="text-[8px] text-gray-400">平均</p>
+                <div class="bg-white p-2 rounded-xl border border-blue-50 shadow-sm">
+                    <p class="text-[8px] text-gray-400">平均単価</p>
                     <p id="footer-avg-price" class="text-xs font-black text-slate-800">¥0</p>
                 </div>
             </div>
