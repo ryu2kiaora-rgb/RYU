@@ -139,10 +139,11 @@
 
 
 <!-- Sales Tab -->
+<!-- Sales Tab -->
 <section id="tab-sales" class="tab-content overflow-y-auto p-4 custom-scrollbar bg-slate-50">
-    
-    <!-- 期間サマリー -->
-    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg mb-4 text-white">
+
+    <!-- 期間サマリー（非表示にするならstyle="display:none;"） -->
+    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 shadow-lg mb-4 text-white" style="display:none;">
         <div class="flex justify-between items-center mb-4">
             <div class="flex flex-col">
                 <h3 class="text-xs font-bold text-blue-300 uppercase tracking-widest">期間サマリー</h3>
@@ -161,27 +162,20 @@
         </div>
     </div>
 
-    <!-- カレンダー（非表示にする場合は style="display:none;" を追加） -->
+    <!-- Calendar（非表示） -->
     <div class="bg-white rounded-2xl p-4 shadow-sm mb-4 border border-slate-100" style="display:none;">
         <div class="flex justify-between items-center mb-4 px-2">
-            <button onclick="changeMonth(-1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                <i class="fas fa-chevron-left"></i>
-            </button>
+            <button onclick="changeMonth(-1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors"><i class="fas fa-chevron-left"></i></button>
             <h2 id="calendar-month" class="font-bold text-base text-slate-800">2024年 0月</h2>
-            <button onclick="changeMonth(1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors">
-                <i class="fas fa-chevron-right"></i>
-            </button>
+            <button onclick="changeMonth(1)" class="p-2 text-gray-400 hover:text-blue-500 transition-colors"><i class="fas fa-chevron-right"></i></button>
         </div>
         <div id="calendar-grid" class="calendar-grid"></div>
     </div>
 
-    <!-- iframeで売上管理アプリ表示 -->
-    <iframe src="https://ryu2kiaora-rgb.github.io/RYU/rideshare/"
-            style="width:100%; min-height:300px; max-height:600px; border:none; border-radius:16px; margin-bottom:12px;"
-            scrolling="yes">
-    </iframe>
+    <!-- Iframeで外部アプリ表示 -->
+    <iframe src="https://ryu2kiaora-rgb.github.io/RYU/rideshare/" style="width:100%; height:600px; border:none;"></iframe>
 
-    <!-- 今日の売上サマリー -->
+    <!-- 今日の概要 -->
     <div id="today-summary-section" class="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-4">
         <h5 id="summary-date-label" class="text-[10px] font-bold text-blue-500 uppercase mb-2">選択日の概要</h5>
         <div class="grid grid-cols-3 gap-2 text-center">
@@ -202,10 +196,54 @@
 
     <!-- 乗車ログ -->
     <div id="ride-logs" class="space-y-3 pb-20">
-        <!-- JSでログを描画 -->
+        <!-- Logs will be injected here -->
     </div>
-
 </section>
+
+<script>
+// 乗車ログ取得＆描画
+async function fetchLogs() {
+    try {
+        // 仮のデータ。Firestoreから取得する場合はここを差し替え
+        const logs = [
+            { id:'1', pickupTime:'10:00', pickupLat:'渋谷', pickupLng:'渋谷駅', dropLat:'恵比寿', dropLng:'恵比寿駅', amount:1200 },
+            { id:'2', pickupTime:'12:30', pickupLat:'新宿', pickupLng:'新宿駅', dropLat:'池袋', dropLng:'池袋駅', amount:900 }
+        ];
+        return logs;
+    } catch(e) {
+        console.error('ログ取得エラー', e);
+        return [];
+    }
+}
+
+async function renderLogs() {
+    const container = document.getElementById('ride-logs');
+    const logs = await fetchLogs();
+
+    if (!logs.length) {
+        container.innerHTML = '<p class="text-gray-400 text-sm">乗車記録がありません</p>';
+        return;
+    }
+
+    container.innerHTML = logs.map(l => `
+        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all">
+            <div class="flex flex-col gap-0.5">
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.pickupTime}</span>
+                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
+                </div>
+                <div class="mt-1 flex items-center gap-1 text-slate-700">
+                    <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
+                    <p class="text-[11px] font-bold truncate max-w-[150px]">${l.pickupLat} → ${l.dropLat}</p>
+                </div>
+            </div>
+            <p class="font-black">¥${l.amount}</p>
+        </div>
+    `).join('');
+}
+
+document.addEventListener('DOMContentLoaded', renderLogs);
+</script>
 
 <script>
 window.onload = () => {
