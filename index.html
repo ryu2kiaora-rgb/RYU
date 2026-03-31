@@ -200,77 +200,70 @@
     </div>
 </section>
 
-<script>
-// 乗車ログ取得＆描画
-async function fetchLogs() {
-    try {
-        // 仮のデータ。Firestoreから取得する場合はここを差し替え
-        const logs = [
-            { id:'1', pickupTime:'10:00', pickupLat:'渋谷', pickupLng:'渋谷駅', dropLat:'恵比寿', dropLng:'恵比寿駅', amount:1200 },
-            { id:'2', pickupTime:'12:30', pickupLat:'新宿', pickupLng:'新宿駅', dropLat:'池袋', dropLng:'池袋駅', amount:900 }
-        ];
-        return logs;
-    } catch(e) {
-        console.error('ログ取得エラー', e);
-        return [];
-    }
-}
+<script type="module">
+import { getDocs, collection } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { auth, db } from "./firebase.js"; // Firebase 初期化済みのモジュール
 
-async function renderLogs() {
-    const container = document.getElementById('ride-logs');
-    const logs = await fetchLogs();
+async function renderRideLogs() {
+  if (!auth.currentUser) return;
+  const uid = auth.currentUser.uid;
 
-    if (!logs.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm">乗車記録がありません</p>';
-        return;
-    }
+  try {
+    const ridesRef = collection(db, `users/${uid}/sales`);
+    const snapshot = await getDocs(ridesRef);
 
-    container.innerHTML = logs.map(l => `
-        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all">
-            <div class="flex flex-col gap-0.5">
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.pickupTime}</span>
-                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
-                </div>
-                <div class="mt-1 flex items-center gap-1 text-slate-700">
-                    <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
-                    <p class="text-[11px] font-bold truncate max-w-[150px]">${l.pickupLat} → ${l.dropLat}</p>
-                </div>
-            </div>
-            <p class="font-black">¥${l.amount}</p>
-        </div>
-    `).join('');
-}
+    let logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-document.addEventListener('DOMContentLoaded', renderLogs);
-</script>
+    // 今日のログだけ抽出
+    const todayStr = new Date().toDateString();
+    logs = logs.filter(l => {
+      const d = new Date(l.pickupTime);
+      return d.toDateString() === todayStr;
+    });
 
-<script>
-window.onload = () => {
     const container = document.getElementById('ride-logs');
     if (!container) return;
 
-    // ここは実際のデータ取得に置き換えてください
-    const logs = [
-        { id: '1', timeStr: '10:15', pickup: '駅前', drop: 'ホテル' },
-        { id: '2', timeStr: '11:30', pickup: '渋谷', drop: '六本木' },
-    ];
+    // フッター集計
+    const total = logs.reduce((s,l)=>s+l.amount,0);
+    const avg = logs.length ? Math.round(total/logs.length) : 0;
 
-    container.innerHTML = logs.map(l => `
-        <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all">
-            <div class="flex flex-col gap-0.5">
-                <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.timeStr}</span>
-                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
-                </div>
-                <div class="mt-1 flex items-center gap-1 text-slate-700">
-                    <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
-                    <p class="text-[11px] font-bold truncate max-w-[150px]">${l.pickup} → ${l.drop}</p>
-                </div>
-            </div>
+    document.getElementById('footer-daily-total').innerText = `¥${total.toLocaleString()}`;
+    document.getElementById('footer-daily-count').innerText = `${logs.length}回`;
+    document.getElementById('footer-avg-price').innerText = logs.length ? `¥${avg.toLocaleString()}` : '--';
+    document.getElementById('summary-date-label').innerText = `${new Date().toLocaleDateString()} の概要`;
+
+    // ログ描画
+    container.innerHTML = logs.length ? logs.map(l => `
+      <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center active:scale-[0.98] transition-all" onclick="openEditLog('${l.id}')">
+        <div class="flex flex-col gap-0.5">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">${l.timeStr}</span>
+            <span class="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Completed</span>
+          </div>
+          <div class="mt-1 flex items-center gap-1 text-slate-700">
+            <i class="fas fa-map-marker-alt text-[10px] text-blue-400"></i>
+            <p class="text-[11px] font-bold truncate max-w-[150px]">乗降地詳細あり</p>
+          </div>
         </div>
-    `).join('');
-};
+        <div class="flex items-center gap-3">
+          <div class="text-right">
+            <p class="text-lg font-black text-slate-800 leading-none">¥${l.amount.toLocaleString()}</p>
+            <p class="text-[8px] text-slate-300 font-bold uppercase mt-1 tracking-tighter">修正/削除 <i class="fas fa-pen ml-0.5"></i></p>
+          </div>
+        </div>
+      </div>
+    `).join('') : '<p class="text-slate-400 text-center py-10 text-xs italic">乗車記録がありません</p>';
+
+  } catch (err) {
+    console.error("ride logs fetch error:", err);
+  }
+}
+
+// ページロード後に呼ぶ
+window.addEventListener('load', () => {
+  renderRideLogs();
+});
 </script>
 
         <!-- Settings Tab -->
