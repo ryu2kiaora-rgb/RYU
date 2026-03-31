@@ -298,15 +298,62 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        // State
-        let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
-        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
-        let lastLat = null, lastLng = null;
-        let startPos = null, endPos = null; 
-        let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
-        let currentLat = null, currentLng = null, editingLogId = null;
-        let editStartMarker, editEndMarker;
-        let driverStatus = "on";
+        // =========================
+// 変数宣言ブロック（ファイルの一番上に貼る）
+// =========================
+let user = null;
+let userName = localStorage.getItem('ride_userName');
+let closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
+
+let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
+let lastLat = null, lastLng = null;
+let startPos = null, endPos = null; 
+let isDriving = false;
+let currentInputAmount = "";
+let salesLogs = []; // 今日の分だけ管理
+let currentViewDate = new Date();
+let selectedDateStr = getBusinessDate(new Date());
+let currentLat = null, currentLng = null, editingLogId = null;
+let editStartMarker, editEndMarker;
+let driverStatus = "on";
+
+// =========================
+// 今日の分だけのローカルログ初期化関数
+// =========================
+// initApp() 内で呼び出すので、先に定義しておく
+function initLocalLogs() {
+    const todayStr = getDateStr(new Date()); // 今日の日付文字列
+    const storedLogs = JSON.parse(localStorage.getItem('ride_salesLogs')) || {};
+    salesLogs = storedLogs[todayStr] || []; // 今日の分だけ取得
+    currentViewDate = new Date();
+}
+
+// =========================
+// アプリ初期化関数
+// =========================
+// ページ読み込み時に呼ばれるメイン処理
+async function initApp() {
+    auth.onAuthStateChanged(async (u) => {
+        if (u) {
+            user = u;
+
+            initMap();      // 地図初期化
+            initNumpad();   // 入力パッド初期化
+
+            // 以前の listenToSales() は止める
+            // listenToSales();  
+
+            // 今日の分だけローカル保存を初期化
+            initLocalLogs();  
+
+            // オンラインドライバー情報取得
+            listenToDrivers(); 
+            
+            // 認証完了後のUI操作
+            document.getElementById('auth-loading-ui').classList.add('hidden');
+        }
+    });
+}
 
         // ===== 位置移動距離計算（節約モード用） =====
 function calcDistance(lat1, lon1, lat2, lon2) {
@@ -1385,6 +1432,7 @@ async function startGASRanking(){
 
 startGASRanking();
 </script>
+    
     <script>
 // -----------------------------
 // 1. グローバル変数
