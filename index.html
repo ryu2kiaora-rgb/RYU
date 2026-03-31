@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbz17Uq4UuK8OYbJ6avl-ra27YViClUguhaWU3iEL1fJDHkz1aQy3K4ZjqDmeoaIPqzm9w/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -991,21 +991,72 @@ function getBusinessTimestamp(log){
                 container.appendChild(btn);
             });
         }
+// カレンダー用データを保持する変数
+let calendarDataMap = {}; 
+
+async function loadCalendarData() {
+    if (!user) return;
+    
+    try {
+        // GAS_URL はご自身のものに置き換えてください
+        const response = await fetch(`${GAS_URL}?mode=calendar&uid=${user.uid}`);
+        const data = await response.json();
+        
+        // 検索しやすいように { "2026-03-20": {sales: 5000, count: 3} } の形に変換
+        calendarDataMap = {};
+        data.forEach(item => {
+            calendarDataMap[item.date] = item;
+        });
+        
+        // データを読み込んだらカレンダーを再描画
+        renderCalendar();
+    } catch (e) {
+        console.error("カレンダー取得エラー:", e);
+    }
+}
+        
 
         function renderCalendar() {
             const grid = document.getElementById('calendar-grid'); if (!grid) return;
             grid.innerHTML = ""; const year = currentViewDate.getFullYear(), month = currentViewDate.getMonth();
             document.getElementById('calendar-month').innerText = `${year}年 ${month + 1}月`;
             const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
-            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
-            for (let d = 1; d <= daysInMonth; d++) {
-                const ds = formatDate(new Date(year, month, d));
-                const dayEl = document.createElement('div');
-                dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
-                if (salesLogs.some(l => l.dateStr === ds)) dayEl.classList.add('has-data');
-                dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
-                grid.appendChild(dayEl);
-            }
+            // renderCalendar関数内、日付ループの部分
+for (let d = 1; d <= daysInMonth; d++) {
+    const dateObj = new Date(year, month, d);
+    const ds = formatDate(dateObj); // "YYYY-MM-DD"形式
+    
+    // GASから取得したデータがあるか確認
+    const dayData = calendarDataMap[ds];
+    
+    const dayEl = document.createElement('div');
+    dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
+    
+    // 売上のK表記ロジック (例: 12500 -> 12.5k)
+    let statsHtml = "";
+    if (dayData) {
+        const kAmount = dayData.sales >= 1000 
+            ? (dayData.sales / 1000).toFixed(1) + 'k' 
+            : dayData.sales;
+        
+        statsHtml = `
+            <div class="flex flex-col items-center leading-none mt-1">
+                <span style="font-size: 8px; color: #3b82f6;">${dayData.count}件</span>
+                <span style="font-size: 9px; font-weight: bold; color: #374151;">${kAmount}</span>
+            </div>
+        `;
+        dayEl.classList.add('has-data');
+    }
+
+    dayEl.innerHTML = `<span>${d}</span>${statsHtml}`;
+    
+    dayEl.onclick = () => {
+        selectedDateStr = ds;
+        renderCalendar();
+        showDailyDetail(ds);
+    };
+    grid.appendChild(dayEl);
+}
         }
 
         function showDailyDetail(ds) {
