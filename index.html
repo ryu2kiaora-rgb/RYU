@@ -292,7 +292,7 @@
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbzC8hbKvNmfjHBkfHQ3Wv2sgHhu35cjDNgo7JlsluhCPCtm1p4k8XbKZIyCGKWP692bOQ/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -369,7 +369,6 @@ async function initApp() {
             user = u;
             initMap();
             initNumpad();
-            loadCalendarData();
             listenToSales();
             listenToDrivers();
             document.getElementById('auth-loading-ui').classList.add('hidden');
@@ -403,86 +402,117 @@ function initMap() {
 
 
 // ===== Firebase節約モード（改良版） =====
-// ===== Firebase同期（12時境ロジック対応版） =====
-async function syncStatusToFirestore(force = false) {
-    if (!user || currentLat === null || currentLng === null) return;
+// --- 修正後のコード ---
+async function syncStatusToFirestore(force=false){
+    if(!user || currentLat===null || currentLng===null) return;
 
-    // 前回の位置から80m以上動いていない場合は更新をスキップ（節約）
-    if (!force && lastLat !== null && lastLng !== null) {
+    if(!force && lastLat!==null && lastLng!==null){
         const distance = calcDistance(lastLat, lastLng, currentLat, currentLng);
-        if (distance < 80) return;
+        if(distance < 80) return;
     }
 
     const todayStr = getBusinessDate(new Date());
     const todayTotal = salesLogs
-        .filter(l => l.dateStr === todayStr)
-        .reduce((s, l) => s + l.amount, 0);
+        .filter(l=>l.dateStr===todayStr)
+        .reduce((s,l)=>s+l.amount,0);
 
-    let newStatus = isDriving ? "occupied" : driverStatus;
+    let newStatus = isDriving ? "occupied" : "on";
+
+    if(driverStatus === "pickup" && !isDriving){
+        newStatus = "pickup";
+    }
 
     try {
-        await db.doc(`${getPublicPath('drivers')}/${user.uid}`).set({
-            name: userName,
-            lat: currentLat,
-            lng: currentLng,
-            status: newStatus,
-            todaySales: todayTotal,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+        await db
+            .doc(`${getPublicPath('drivers')}/${user.uid}`)
+            .set({
+                name: userName,
+                lat: currentLat,
+                lng: currentLng,
+                status: newStatus,
+                todaySales: todayTotal,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }, {merge: true});
 
         lastLat = currentLat;
         lastLng = currentLng;
-    } catch (e) {
+
+    } catch(e) {
         console.error("sync error", e);
     }
 }
+// [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
+function startGPS(){
 
-function startGPS() {
-    if (!navigator.geolocation) return;
+if(!navigator.geolocation) return
 
-    if (userMarker) {
-        map.removeLayer(userMarker);
-        userMarker = null;
-    }
-
-    watchId = navigator.geolocation.watchPosition((pos) => {
-        if (pos.coords.accuracy > 120) return;
-        currentLat = pos.coords.latitude;
-        currentLng = pos.coords.longitude;
-
-        if (!map) return;
-
-        if (!userMarker) {
-            userMarker = L.marker([currentLat, currentLng], {
-                icon: L.divIcon({
-                    html: createMarkerHtml(userName, isDriving ? 'occupied' : 'on'),
-                    className: '',
-                    iconSize: [0, 0]
-                })
-            }).addTo(map);
-            map.setView([currentLat, currentLng], 16);
-            syncStatusToFirestore(true);
-        } else {
-            userMarker.setLatLng([currentLat, currentLng]);
-        }
-    }, (err) => {
-        console.log("GPS error", err);
-    }, {
-        enableHighAccuracy: true,
-        maximumAge: 15000,
-        timeout: 20000
-    });
-
-    startSyncInterval();
+// 既存マーカー削除（残像防止）
+if(userMarker){
+    map.removeLayer(userMarker)
+    userMarker=null
 }
 
-function startSyncInterval() {
-    if (syncInterval) clearInterval(syncInterval);
-    const interval = isDriving ? 20000 : 180000; // 実車中は20秒、待機中は3分おき
-    syncInterval = setInterval(() => {
-        syncStatusToFirestore();
-    }, interval);
+watchId = navigator.geolocation.watchPosition((pos)=>{
+
+if(pos.coords.accuracy>120) return
+
+const lat = pos.coords.latitude
+const lng = pos.coords.longitude
+
+currentLat=lat
+currentLng=lng
+
+if(!map) return
+
+if(!userMarker){
+
+userMarker=L.marker([lat,lng],{
+icon:L.divIcon({
+html:createMarkerHtml(userName,isDriving?'occupied':'on'),
+className:'',
+iconSize:[0,0]
+})
+}).addTo(map)
+
+map.setView([lat,lng],16)
+
+syncStatusToFirestore(true)
+
+}else{
+
+userMarker.setLatLng([lat,lng])
+
 }
+
+},(err)=>{
+
+console.log("GPS error",err)
+
+},{
+enableHighAccuracy:true,
+maximumAge:15000,
+timeout:20000
+})
+
+startSyncInterval()
+
+}
+
+    // 書き込みを60秒ごとに制限
+function startSyncInterval(){
+
+if(syncInterval) clearInterval(syncInterval)
+
+const interval = isDriving ? 20000 : 180000
+
+syncInterval=setInterval(()=>{
+
+syncStatusToFirestore()
+
+},interval)
+
+}
+
 
 // iPhone対策：画面復帰時にGPS再取得
 document.addEventListener("visibilitychange", () => {
@@ -520,7 +550,7 @@ const path = getPrivatePath('sales')
 if(!path) return
 
 const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 7)
 
 const dateLimit = formatDate(thirtyDaysAgo)
 
@@ -961,79 +991,22 @@ function getBusinessTimestamp(log){
                 container.appendChild(btn);
             });
         }
-// カレンダー用データを保持する変数
-let calendarDataMap = {}; 
 
-async function loadCalendarData() {
-    if (!user) return;
-    
-    try {
-        // GAS_URL はご自身のものに置き換えてください
-        const response = await fetch(`${GAS_URL}?mode=calendar&uid=${user.uid}`);
-        const data = await response.json();
-        
-        // 検索しやすいように { "2026-03-20": {sales: 5000, count: 3} } の形に変換
-        calendarDataMap = {};
-        data.forEach(item => {
-            calendarDataMap[item.date] = item;
-        });
-        
-        // データを読み込んだらカレンダーを再描画
-        renderCalendar();
-    } catch (e) {
-        console.error("カレンダー取得エラー:", e);
-    }
-}
-        
-
-       async function renderCalendar() {
-    const grid = document.getElementById('calendar-grid');
-    if (!grid) return;
-    grid.innerHTML = "";
-    
-    const year = currentViewDate.getFullYear();
-    const month = currentViewDate.getMonth();
-    document.getElementById('calendar-month').innerText = `${year}年 ${month + 1}月`;
-
-    // GASからカレンダー用データを取得（UIDを渡す）
-    let calendarMap = {};
-    try {
-        const res = await fetch(`${GAS_URL}?mode=calendar&uid=${user.uid}`);
-        const data = await res.json();
-        data.forEach(item => { calendarMap[item.date] = item; });
-    } catch (e) { console.error("Calendar fetch error", e); }
-
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-    for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
-
-    for (let d = 1; d <= daysInMonth; d++) {
-        const ds = formatDate(new Date(year, month, d));
-        const dayData = calendarMap[ds];
-        
-        const dayEl = document.createElement('div');
-        dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
-        
-        let statsHtml = "";
-        if (dayData) {
-            dayEl.classList.add('has-data');
-            const kAmount = dayData.sales >= 1000 ? (dayData.sales / 1000).toFixed(1) + 'k' : dayData.sales;
-            statsHtml = `<div class="flex flex-col items-center leading-none mt-1">
-                <span style="font-size: 7px; color: #3b82f6;">${dayData.count}件</span>
-                <span style="font-size: 8px; font-weight: bold;">${kAmount}</span>
-            </div>`;
+        function renderCalendar() {
+            const grid = document.getElementById('calendar-grid'); if (!grid) return;
+            grid.innerHTML = ""; const year = currentViewDate.getFullYear(), month = currentViewDate.getMonth();
+            document.getElementById('calendar-month').innerText = `${year}年 ${month + 1}月`;
+            const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
+            for (let i = 0; i < firstDay; i++) grid.appendChild(document.createElement('div'));
+            for (let d = 1; d <= daysInMonth; d++) {
+                const ds = formatDate(new Date(year, month, d));
+                const dayEl = document.createElement('div');
+                dayEl.className = `calendar-day ${ds === selectedDateStr ? 'active' : ''}`;
+                if (salesLogs.some(l => l.dateStr === ds)) dayEl.classList.add('has-data');
+                dayEl.innerText = d; dayEl.onclick = () => { selectedDateStr = ds; renderCalendar(); showDailyDetail(ds); };
+                grid.appendChild(dayEl);
+            }
         }
-
-        dayEl.innerHTML = `<span>${d}</span>${statsHtml}`;
-        dayEl.onclick = () => {
-            selectedDateStr = ds;
-            renderCalendar();
-            showDailyDetail(ds);
-        };
-        grid.appendChild(dayEl);
-    }
-}
 
         function showDailyDetail(ds) {
             const logs = salesLogs
