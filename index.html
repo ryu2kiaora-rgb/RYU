@@ -369,7 +369,8 @@ async function initApp() {
             user = u;
             initMap();
             initNumpad();
-            listenToSales();
+            //listenToSales();
+            initLocalLogs(); 
             listenToDrivers();
             document.getElementById('auth-loading-ui').classList.add('hidden');
             if (userName) {
@@ -1384,6 +1385,101 @@ async function startGASRanking(){
 
 startGASRanking();
 </script>
-    
+    <script>
+// -----------------------------
+// 1. グローバル変数
+// -----------------------------
+let salesLogs = [];   // 当日分ログ
+let user = null;
+
+// -----------------------------
+// 2. 当日の基準日取得・ローカル保存関数
+// -----------------------------
+function getBusinessDate() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function checkLocalStorageReset() {
+    const storedDate = localStorage.getItem('businessDate');
+    const today = getBusinessDate().toISOString();
+    if (storedDate !== today) {
+        salesLogs = [];
+        localStorage.setItem('businessDate', today);
+        localStorage.setItem('todaySales', JSON.stringify([]));
+        console.log('ローカル保存をリセットしました');
+    } else {
+        const loaded = localStorage.getItem('todaySales');
+        if (loaded) salesLogs = JSON.parse(loaded);
+    }
+}
+
+function loadTodaySales() {
+    const stored = localStorage.getItem('todaySales');
+    if (stored) salesLogs = JSON.parse(stored);
+}
+
+// -----------------------------
+// 3. 乗車ログ追加関数
+// -----------------------------
+function addRideLog(log) {
+    salesLogs.push(log);
+    localStorage.setItem('todaySales', JSON.stringify(salesLogs));
+
+    // GASに送信する場合はここで
+    if (typeof sendToGAS === 'function') {
+        sendToGAS(log, log.id || Date.now());
+    }
+
+    // UI更新（件数表示など）
+    const countEl = document.getElementById('today-count');
+    if (countEl) countEl.textContent = salesLogs.length;
+
+    const listEl = document.getElementById('today-sales');
+    if (listEl) {
+        const li = document.createElement('li');
+        li.textContent = `#${salesLogs.length} ${log.pickupTime || ''} → ${log.dropTime || ''}`;
+        listEl.appendChild(li);
+    }
+}
+
+// -----------------------------
+// 4. 日付変更チェック（毎分）
+setInterval(() => {
+    checkLocalStorageReset();
+}, 60*1000);
+
+// -----------------------------
+// 5. アプリ起動関数
+// -----------------------------
+async function initApp() {
+    checkLocalStorageReset();
+    loadTodaySales();
+
+    auth.onAuthStateChanged(async (u) => {
+        if (u) {
+            user = u;
+            initMap();
+            initNumpad();
+            listenToDrivers();  // 他ユーザー位置は維持
+            document.getElementById('auth-loading-ui')?.classList.add('hidden');
+
+            // 名前表示などがある場合
+            if (typeof updateNameDisplay === 'function') updateNameDisplay();
+
+            // 旧 listenToSales は止める
+            console.log('当日分はローカル保存＋GAS送信で管理します');
+        } else {
+            user = null;
+            document.getElementById('auth-loading-ui')?.classList.remove('hidden');
+        }
+    });
+}
+
+// -----------------------------
+// 6. 初期起動
+// -----------------------------
+initApp();
+</script>
 </body>
 </html>
