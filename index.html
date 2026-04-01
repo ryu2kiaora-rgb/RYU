@@ -77,13 +77,12 @@
         <section id="tab-home" class="tab-content active relative">
             <div id="map"></div>
 
-            <div class="absolute top-4 left-4 z-[500]">
-    <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
-        <div id="ranking-list" class="space-y-1 text-[10px]">
-            <canvas id="ranking-canvas" width="300" height="400"></canvas>
-            <p class="pip-hint">タップして小窓(PiP)で表示</p>
-            <video id="pip-video" autoplay playsinline muted style="display: none;"></video>
-        </div>
+            <div class="absolute top-4 left-4 z-[500] w-[280px]"> 
+    <div id="ranking-list">
+        <canvas id="ranking-canvas" width="300" height="400" style="width:100%; border-radius:12px;"></canvas>
+        <video id="pip-video" autoplay playsinline muted style="display:none;"></video>
+    </div>
+</div>
     </div>
 </div>
 
