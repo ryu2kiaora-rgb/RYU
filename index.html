@@ -77,9 +77,9 @@
         <section id="tab-home" class="tab-content active relative">
             <div id="map"></div>
 
-            <div class="absolute top-4 left-4 z-[500] w-[280px]"> 
-    <div id="ranking-list">
-        <canvas id="ranking-canvas" width="300" height="400" style="width:100%; border-radius:12px;"></canvas>
+            <div class="absolute top-4 left-4 z-[500] w-[220px] pointer-events-none">
+    <div id="ranking-list" class="pointer-events-auto">
+        <canvas id="ranking-canvas" width="300" height="400" style="width:100%; border-radius:12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"></canvas>
         <video id="pip-video" autoplay playsinline muted style="display:none;"></video>
     </div>
 </div>
@@ -1307,42 +1307,37 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 
 <script>
-// --- 1. 設定と変数 ---
+// --- 設定拡張 ---
 const PIP_CONFIG = {
     updateInterval: 3 * 60 * 1000,
+    slideInterval: 10 * 1000, // 10秒ごとにランキングの種類を切り替え
     fps: 12,
     colors: {
-        bg: '#ffffff',
-        panel: '#f8fafc',
-        me: '#eff6ff',
-        textMain: '#1e293b',
-        textMe: '#2563eb',
-        gold: '#f59e0b',
-        red: '#ef4444'
+        bg: '#ffffff', panel: '#f8fafc', me: '#eff6ff',
+        textMain: '#1e293b', textMe: '#2563eb', gold: '#f59e0b', red: '#ef4444'
     }
 };
 
-let rankingData = [];
+let allRankingData = { "売上": [], "件数": [], "平均単価": [], "最高単価": [] };
+let currentType = "売上"; // 現在表示中の種類
+let lastSlideTime = Date.now();
 let lastFetchTime = Date.now();
+
 const canvas = document.getElementById('ranking-canvas');
 const ctx = canvas.getContext('2d');
 const pipVideo = document.getElementById('pip-video');
 let notifications = [];
 let shineEffect = { active: false, index: -1, alpha: 0 };
 
-// 角丸描画のおまじない
+// 角丸のおまじない
 CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
-    this.beginPath();
-    this.moveTo(x+r, y);
-    this.arcTo(x+w, y, x+w, y+h, r);
-    this.arcTo(x+w, y+h, x, y+h, r);
-    this.arcTo(x, y+h, x, y, r);
-    this.arcTo(x, y, x+w, y, r);
-    this.closePath();
-    this.fill();
+    this.beginPath(); this.moveTo(x+r, y);
+    this.arcTo(x+w, y, x+w, y+h, r); this.arcTo(x+w, y+h, x, y+h, r);
+    this.arcTo(x, y+h, x, y, r); this.arcTo(x, y, x+w, y, r);
+    this.closePath(); this.fill();
 };
 
-// --- 2. データ取得 (順位変動チェック付き) ---
+// --- 1. データ取得 (4項目すべて集計) ---
 async function fetchRankingWithDelay() {
     const jitter = Math.random() * 10000;
     setTimeout(async () => {
@@ -1352,59 +1347,59 @@ async function fetchRankingWithDelay() {
             
             const summary = {};
             rawData.forEach(d => {
-                if(!summary[d.driverId]) summary[d.driverId] = { name: d.userName, amount: 0 };
-                summary[d.driverId].amount += d.amount;
+                if(!summary[d.driverId]) {
+                    summary[d.driverId] = { name: d.userName, total: 0, count: 0, max: 0 };
+                }
+                summary[d.driverId].total += d.amount;
+                summary[d.driverId].count += 1;
+                if(d.amount > summary[d.driverId].max) summary[d.driverId].max = d.amount;
             });
 
-            const newList = Object.keys(summary).map(id => ({
-                id: id,
-                name: summary[id].name,
-                amount: summary[id].amount,
+            const drivers = Object.keys(summary).map(id => ({
+                id, name: summary[id].name,
+                total: summary[id].total,
+                count: summary[id].count,
+                avg: Math.floor(summary[id].total / summary[id].count),
+                max: summary[id].max,
                 isMe: id === (typeof user !== 'undefined' ? user?.uid : null)
-            })).sort((a, b) => b.amount - a.amount).slice(0, 5);
+            }));
 
-            // 初回読み込み時
-            if (rankingData.length === 0) {
-                rankingData = newList.map((d, i) => ({ ...d, y: 75 + (i * 62), targetY: 75 + (i * 62) }));
-            } else {
-                // 順位変動があるかチェック
-                newList.forEach((newD, newIdx) => {
-                    const oldIdx = rankingData.findIndex(oldD => oldD.id === newD.id);
-                    const targetY = 75 + (newIdx * 62);
-                    
-                    if (oldIdx !== -1) {
-                        // 既存ユーザー：データを更新し、目標位置を設定
-                        rankingData[oldIdx].amount = newD.amount;
-                        rankingData[oldIdx].targetY = targetY;
-                        
-                        // 順位が上がった場合のみキラリ
-                        if (newIdx < oldIdx) triggerShine(oldIdx); 
-                    } else {
-                        // 新規ランクイン
-                        rankingData.push({ ...newD, y: 400, targetY: targetY });
-                    }
-                });
-                // ランク外になった人を削除
-                rankingData = rankingData.filter(d => newList.some(n => n.id === d.id));
-                
-                // 自分の順位ダウン通知
-                const oldMeRank = rankingData.findIndex(d => d.isMe);
-                const newMeRank = newList.findIndex(d => d.isMe);
-                if (newMeRank > oldMeRank && oldMeRank !== -1) addNotification("ランクダウン！挽回しましょう！");
-            }
+            // 4つのランキングを作成
+            const createList = (sortKey) => [...drivers].sort((a,b) => b[sortKey] - a[sortKey]).slice(0, 5);
+            
+            const newAllData = {
+                "売上": createList('total'),
+                "件数": createList('count'),
+                "平均単価": createList('avg'),
+                "最高単価": createList('max')
+            };
 
+            // 順位変動チェック（売上の時だけ通知する例）
+            const oldMeIdx = allRankingData["売上"].findIndex(d => d.isMe);
+            const newMeIdx = newAllData["売上"].findIndex(d => d.isMe);
+            if (newMeIdx > oldMeIdx && oldMeIdx !== -1) addNotification("売上順位ダウン！");
+
+            allRankingData = newAllData;
             lastFetchTime = Date.now();
-        } catch (e) { console.error("Ranking Error:", e); }
+        } catch (e) { console.error("Fetch Error:", e); }
     }, jitter);
 }
 
-function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }); }
-function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
-
-// --- 3. 描画エンジン ---
+// --- 2. 描画エンジン (スライド機能付き) ---
 function renderCanvas() {
     if (!ctx) return;
     const isPiP = !!document.pictureInPictureElement;
+
+    // スライド切り替えロジック
+    if (Date.now() - lastSlideTime > PIP_CONFIG.slideInterval) {
+        const types = Object.keys(allRankingData);
+        let nextIdx = types.indexOf(currentType) + 1;
+        if (nextIdx >= types.length) nextIdx = 0;
+        currentType = types[nextIdx];
+        lastSlideTime = Date.now();
+        // 切り替え時に全要素を下からふわっと出すためのリセット
+        allRankingData[currentType].forEach(d => d.y = 400);
+    }
 
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1415,102 +1410,100 @@ function renderCanvas() {
         ctx.beginPath(); ctx.arc(25, 30, 8, 0, Math.PI * 2); ctx.fill();
     }
 
+    // タイトル (現在の種類を表示)
     ctx.fillStyle = PIP_CONFIG.colors.textMain;
     ctx.font = "bold 22px sans-serif";
-    ctx.fillText("本日の売上順位", 50, 40);
+    ctx.fillText(`本日の${currentType} TOP5`, 50, 40);
 
-    // プログレスバー
-    const elapsed = Date.now() - lastFetchTime;
-    const progress = Math.min(elapsed / PIP_CONFIG.updateInterval, 1);
-    ctx.fillStyle = "#e2e8f0";
-    ctx.fillRect(0, 392, 300, 8);
-    ctx.fillStyle = "#60a5fa";
-    ctx.fillRect(0, 392, 300 * (1 - progress), 8);
+    // プログレスバー (次のデータ更新まで)
+    const prog = Math.min((Date.now() - lastFetchTime) / PIP_CONFIG.updateInterval, 1);
+    ctx.fillStyle = "#e2e8f0"; ctx.fillRect(0, 392, 300, 8);
+    ctx.fillStyle = "#60a5fa"; ctx.fillRect(0, 392, 300 * (1 - prog), 8);
 
-    // 下部のガイド（PiP中か否かで内容を変える）
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText(isPiP ? "タップしてアプリに戻る" : "タップして小窓(PiP)で表示", 150, 385);
-    ctx.textAlign = "left";
+    // スライドインジケーター (今どのランキングかドットで表示)
+    const types = Object.keys(allRankingData);
+    types.forEach((t, i) => {
+        ctx.fillStyle = (t === currentType) ? "#60a5fa" : "#e2e8f0";
+        ctx.beginPath(); ctx.arc(230 + (i * 15), 30, 4, 0, Math.PI*2); ctx.fill();
+    });
 
-    // ランキング
-    rankingData.forEach((d, i) => {
-        // 順位が変わった時だけアニメーション移動
-        if (Math.abs(d.targetY - d.y) > 0.1) {
-            d.y += (d.targetY - d.y) * 0.1;
-        } else {
-            d.y = d.targetY;
-        }
+    // ランキング描画
+    const currentList = allRankingData[currentType];
+    currentList.forEach((d, i) => {
+        const targetY = 75 + (i * 62);
+        if (typeof d.y === 'undefined') d.y = 400;
+        d.y += (targetY - d.y) * 0.1;
 
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
         ctx.fillRoundedRect(10, d.y, 280, 55, 12);
         
-        // メダル
-        const rankIdx = [...rankingData].sort((a,b)=>b.amount-a.amount).findIndex(x => x.id === d.id);
-        if (rankIdx === 0) ctx.fillText("🥇", 18, d.y + 38);
-        else if (rankIdx === 1) ctx.fillText("🥈", 18, d.y + 38);
-        else if (rankIdx === 2) ctx.fillText("🥉", 18, d.y + 38);
+        // メダル・順位
+        ctx.font = "30px sans-serif";
+        if (i === 0) ctx.fillText("🥇", 18, d.y + 38);
+        else if (i === 1) ctx.fillText("🥈", 18, d.y + 38);
+        else if (i === 2) ctx.fillText("🥉", 18, d.y + 38);
         else {
-            ctx.fillStyle = "#94a3b8";
-            ctx.font = "italic bold 24px sans-serif";
-            ctx.fillText(`${rankIdx + 1}`, 25, d.y + 38);
+            ctx.fillStyle = "#94a3b8"; ctx.font = "italic bold 24px sans-serif";
+            ctx.fillText(`${i + 1}`, 25, d.y + 38);
         }
 
-        // 金額と名前カット
-        const priceText = `¥${d.amount.toLocaleString()}`;
+        // 値の整形
+        let valText = "";
+        if (currentType === "売上") valText = `¥${d.total.toLocaleString()}`;
+        if (currentType === "件数") valText = `${d.count}件`;
+        if (currentType === "平均単価") valText = `¥${d.avg.toLocaleString()}`;
+        if (currentType === "最高単価") valText = `¥${d.max.toLocaleString()}`;
+
         ctx.font = "bold 20px monospace";
-        const priceWidth = ctx.measureText(priceText).width;
+        const valWidth = ctx.measureText(valText).width;
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
-        ctx.textAlign = "right";
-        ctx.fillText(priceText, 280, d.y + 36);
+        ctx.textAlign = "right"; ctx.fillText(valText, 280, d.y + 36);
         ctx.textAlign = "left";
 
+        // 名前カット
         ctx.font = "bold 18px sans-serif";
-        let displayName = d.name;
-        const maxNameWidth = 280 - 65 - priceWidth - 15;
-        if (ctx.measureText(displayName).width > maxNameWidth) {
-            while (ctx.measureText(displayName + "...").width > maxNameWidth && displayName.length > 0) {
-                displayName = displayName.slice(0, -1);
-            }
-            displayName += "...";
+        let disp = d.name;
+        const maxW = 280 - 65 - valWidth - 15;
+        if (ctx.measureText(disp).width > maxW) {
+            while (ctx.measureText(disp + "...").width > maxW && disp.length > 0) disp = disp.slice(0, -1);
+            disp += "...";
         }
-        ctx.fillText(displayName, 62, d.y + 36);
+        ctx.fillText(disp, 62, d.y + 36);
     });
 
+    // ガイド
+    ctx.fillStyle = "#94a3b8"; ctx.font = "10px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(isPiP ? "タップしてアプリに戻る" : "タップして小窓(PiP)で表示", 150, 385);
+    ctx.textAlign = "left";
+
     // 通知
-    notifications.forEach((n) => {
-        ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
-        ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText(n.msg, 150, 360); ctx.textAlign = "left";
+    notifications.forEach(n => {
+        ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`; ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center"; ctx.fillText(n.msg, 150, 360); ctx.textAlign = "left";
         n.timer--; if (n.timer < 30) n.alpha -= 0.1;
     });
     notifications = notifications.filter(n => n.alpha > 0);
 }
 
-// --- 4. PiP制御 ---
+function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }); }
+function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
+
 async function togglePiP() {
     try {
-        if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-        } else {
+        if (document.pictureInPictureElement) await document.exitPictureInPicture();
+        else {
             const stream = canvas.captureStream(PIP_CONFIG.fps);
             pipVideo.srcObject = stream;
             await pipVideo.play();
             await pipVideo.requestPictureInPicture();
-            
-            // 小窓にした際、少し遅れてブラウザをバックグラウンドへ（通知を送る等でOSに促すことは可能ですが、基本はユーザーがマップへ切り替え）
-            console.log("PiP Mode: Navigate to Navigation App now.");
         }
     } catch (e) { console.error(e); }
 }
 
 canvas.addEventListener('click', togglePiP);
-function startForceLoop() { setInterval(renderCanvas, 100); }
-
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-startForceLoop();
+setInterval(renderCanvas, 100); 
 </script>
     
 </body>
