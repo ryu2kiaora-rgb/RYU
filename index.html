@@ -1324,7 +1324,6 @@ const PIP_CONFIG = {
 };
 
 let rankingData = [];
-let prevRankingData = [];
 let lastFetchTime = Date.now();
 const canvas = document.getElementById('ranking-canvas');
 const ctx = canvas.getContext('2d');
@@ -1332,7 +1331,7 @@ const pipVideo = document.getElementById('pip-video');
 let notifications = [];
 let shineEffect = { active: false, index: -1, alpha: 0 };
 
-// --- 2. 角丸を描画するための「おまじない」（これが無いと止まります） ---
+// 角丸描画のおまじない
 CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
     this.beginPath();
     this.moveTo(x+r, y);
@@ -1344,12 +1343,11 @@ CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
     this.fill();
 };
 
-// --- 3. データ取得 (3分おき + ゆらぎ) ---
+// --- 2. データ取得 (順位変動チェック付き) ---
 async function fetchRankingWithDelay() {
     const jitter = Math.random() * 10000;
     setTimeout(async () => {
         try {
-            // GAS_URL が定義されていることを前提としています
             const res = await fetch(GAS_URL + "?mode=ranking");
             const rawData = await res.json();
             
@@ -1363,60 +1361,66 @@ async function fetchRankingWithDelay() {
                 id: id,
                 name: summary[id].name,
                 amount: summary[id].amount,
-                y: 400,
-                targetY: 0,
-                // user?.uid または MY_ID など、ログインユーザー判別用
-                isMe: id === (typeof user !== 'undefined' ? user?.uid : null) 
+                isMe: id === (typeof user !== 'undefined' ? user?.uid : null)
             })).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
-            if (prevRankingData.length > 0) {
-                const myPrevRank = prevRankingData.findIndex(d => d.isMe);
-                const myNewRank = newList.findIndex(d => d.isMe);
-                if (myNewRank > myPrevRank && myPrevRank !== -1) {
-                    addNotification("ランクダウン！挽回しましょう！");
-                } else if (myNewRank < myPrevRank && myPrevRank !== -1) {
-                    triggerShine(myNewRank);
-                }
+            // 初回読み込み時
+            if (rankingData.length === 0) {
+                rankingData = newList.map((d, i) => ({ ...d, y: 75 + (i * 62), targetY: 75 + (i * 62) }));
+            } else {
+                // 順位変動があるかチェック
+                newList.forEach((newD, newIdx) => {
+                    const oldIdx = rankingData.findIndex(oldD => oldD.id === newD.id);
+                    const targetY = 75 + (newIdx * 62);
+                    
+                    if (oldIdx !== -1) {
+                        // 既存ユーザー：データを更新し、目標位置を設定
+                        rankingData[oldIdx].amount = newD.amount;
+                        rankingData[oldIdx].targetY = targetY;
+                        
+                        // 順位が上がった場合のみキラリ
+                        if (newIdx < oldIdx) triggerShine(oldIdx); 
+                    } else {
+                        // 新規ランクイン
+                        rankingData.push({ ...newD, y: 400, targetY: targetY });
+                    }
+                });
+                // ランク外になった人を削除
+                rankingData = rankingData.filter(d => newList.some(n => n.id === d.id));
+                
+                // 自分の順位ダウン通知
+                const oldMeRank = rankingData.findIndex(d => d.isMe);
+                const newMeRank = newList.findIndex(d => d.isMe);
+                if (newMeRank > oldMeRank && oldMeRank !== -1) addNotification("ランクダウン！挽回しましょう！");
             }
 
-            prevRankingData = JSON.parse(JSON.stringify(rankingData));
-            rankingData = newList;
             lastFetchTime = Date.now();
-        } catch (e) { console.error("Ranking Fetch Error:", e); }
+        } catch (e) { console.error("Ranking Error:", e); }
     }, jitter);
 }
 
-function addNotification(msg) {
-    notifications.push({ msg, timer: 120, alpha: 1 });
-}
+function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }); }
+function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
 
-function triggerShine(index) {
-    shineEffect = { active: true, index, alpha: 1 };
-}
-
-// --- 視認性・レイアウト改善版（名前カット機能付き） ---
+// --- 3. 描画エンジン ---
 function renderCanvas() {
     if (!ctx) return;
+    const isPiP = !!document.pictureInPictureElement;
 
-    // 背景（白）
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // ビーコン（赤点滅）
-    const isBeaming = Math.floor(Date.now() / 500) % 2 === 0;
-    if (isBeaming) {
+    // ビーコン
+    if (Math.floor(Date.now() / 500) % 2 === 0) {
         ctx.fillStyle = PIP_CONFIG.colors.red;
-        ctx.beginPath(); 
-        ctx.arc(25, 30, 8, 0, Math.PI * 2); 
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(25, 30, 8, 0, Math.PI * 2); ctx.fill();
     }
 
-    // タイトル
     ctx.fillStyle = PIP_CONFIG.colors.textMain;
     ctx.font = "bold 22px sans-serif";
     ctx.fillText("本日の売上順位", 50, 40);
 
-    // カウントダウンバー
+    // プログレスバー
     const elapsed = Date.now() - lastFetchTime;
     const progress = Math.min(elapsed / PIP_CONFIG.updateInterval, 1);
     ctx.fillStyle = "#e2e8f0";
@@ -1424,81 +1428,68 @@ function renderCanvas() {
     ctx.fillStyle = "#60a5fa";
     ctx.fillRect(0, 392, 300 * (1 - progress), 8);
 
-    // ランキングリスト
-    rankingData.forEach((d, i) => {
-        d.targetY = 75 + (i * 62);
-        if (typeof d.y === 'undefined') d.y = 400;
-        d.y += (d.targetY - d.y) * 0.1;
+    // 下部のガイド（PiP中か否かで内容を変える）
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(isPiP ? "タップしてアプリに戻る" : "タップして小窓(PiP)で表示", 150, 385);
+    ctx.textAlign = "left";
 
-        // 背景ボックス
+    // ランキング
+    rankingData.forEach((d, i) => {
+        // 順位が変わった時だけアニメーション移動
+        if (Math.abs(d.targetY - d.y) > 0.1) {
+            d.y += (d.targetY - d.y) * 0.1;
+        } else {
+            d.y = d.targetY;
+        }
+
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
         ctx.fillRoundedRect(10, d.y, 280, 55, 12);
         
-        // --- 1. メダル・順位の描画 ---
-        if (i === 0) {
-            ctx.font = "30px sans-serif";
-            ctx.fillText("🥇", 18, d.y + 38);
-        } else if (i === 1) {
-            ctx.font = "30px sans-serif";
-            ctx.fillText("🥈", 18, d.y + 38);
-        } else if (i === 2) {
-            ctx.font = "30px sans-serif";
-            ctx.fillText("🥉", 18, d.y + 38);
-        } else {
+        // メダル
+        const rankIdx = [...rankingData].sort((a,b)=>b.amount-a.amount).findIndex(x => x.id === d.id);
+        if (rankIdx === 0) ctx.fillText("🥇", 18, d.y + 38);
+        else if (rankIdx === 1) ctx.fillText("🥈", 18, d.y + 38);
+        else if (rankIdx === 2) ctx.fillText("🥉", 18, d.y + 38);
+        else {
             ctx.fillStyle = "#94a3b8";
             ctx.font = "italic bold 24px sans-serif";
-            ctx.fillText(`${i + 1}`, 25, d.y + 38);
+            ctx.fillText(`${rankIdx + 1}`, 25, d.y + 38);
         }
 
-        // --- 2. 金額（先に幅を確保するために右側に描画） ---
+        // 金額と名前カット
         const priceText = `¥${d.amount.toLocaleString()}`;
-        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
         ctx.font = "bold 20px monospace";
+        const priceWidth = ctx.measureText(priceText).width;
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
         ctx.textAlign = "right";
         ctx.fillText(priceText, 280, d.y + 36);
-        
-        // 金額の文字列の幅を計算（これより左側に名前を収める）
-        const priceWidth = ctx.measureText(priceText).width;
-        ctx.textAlign = "left"; // リセット
+        ctx.textAlign = "left";
 
-        // --- 3. 名前の描画（長い場合はカット） ---
         ctx.font = "bold 18px sans-serif";
         let displayName = d.name;
-        const maxNameWidth = 280 - 65 - priceWidth - 15; // 左余白、右金額、間隔15pxを引く
-
-        // 名前が長すぎる場合に1文字ずつ削って「...」を付ける
+        const maxNameWidth = 280 - 65 - priceWidth - 15;
         if (ctx.measureText(displayName).width > maxNameWidth) {
             while (ctx.measureText(displayName + "...").width > maxNameWidth && displayName.length > 0) {
                 displayName = displayName.slice(0, -1);
             }
             displayName += "...";
         }
-
-        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
         ctx.fillText(displayName, 62, d.y + 36);
-
-        // キラリ演出
-        if (shineEffect.active && shineEffect.index === i) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
-            ctx.fillRoundedRect(10, d.y, 280, 55, 12);
-            shineEffect.alpha -= 0.1;
-            if (shineEffect.alpha <= 0) shineEffect.active = false;
-        }
     });
 
-    // 通知メッセージ
-    notifications.forEach((n, i) => {
+    // 通知
+    notifications.forEach((n) => {
         ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
-        ctx.font = "bold 20px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(n.msg, 150, 370);
-        ctx.textAlign = "left";
-        n.timer--;
-        if (n.timer < 30) n.alpha -= 0.1;
+        ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(n.msg, 150, 360); ctx.textAlign = "left";
+        n.timer--; if (n.timer < 30) n.alpha -= 0.1;
     });
     notifications = notifications.filter(n => n.alpha > 0);
 }
-// --- 5. PiP起動と初期化 ---
+
+// --- 4. PiP制御 ---
 async function togglePiP() {
     try {
         if (document.pictureInPictureElement) {
@@ -1508,26 +1499,19 @@ async function togglePiP() {
             pipVideo.srcObject = stream;
             await pipVideo.play();
             await pipVideo.requestPictureInPicture();
+            
+            // 小窓にした際、少し遅れてブラウザをバックグラウンドへ（通知を送る等でOSに促すことは可能ですが、基本はユーザーがマップへ切り替え）
+            console.log("PiP Mode: Navigate to Navigation App now.");
         }
-    } catch (e) {
-        console.error(e);
-        alert("PiPの起動に失敗しました。");
-    }
+    } catch (e) { console.error(e); }
 }
 
-// イベント登録
 canvas.addEventListener('click', togglePiP);
+function startForceLoop() { setInterval(renderCanvas, 100); }
 
-// ループ開始
-function startForceLoop() {
-    setInterval(renderCanvas, 100); // 0.1秒おきに強制描画
-}
-
-// 実行
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 startForceLoop();
-
 </script>
     
 </body>
