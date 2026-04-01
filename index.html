@@ -80,9 +80,7 @@
             <div class="absolute top-4 left-4 z-[500] w-[150px] pointer-events-none">
     <div id="ranking-list" class="pointer-events-auto">
         <canvas id="ranking-canvas" width="300" height="400" style="width:100%; border-radius:12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"></canvas>
-        <video id="pip-video" autoplay playsinline muted 
-  style="position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
-</video>
+        <video id="pip-video" playsinline muted style="position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></video>
     </div>
 </div>
     </div>
@@ -1506,25 +1504,30 @@ async function togglePiP() {
             return;
         }
 
-        // 1. ストリームをセットして、強制的にロードを開始
+        // 1. ストリームを取得
         const stream = canvas.captureStream(30);
+        
+        // 2. ★iOSの「ユーザー操作」判定が生きているうちに、一気に畳み掛ける
+        // srcObjectを入れる前に play() を呼ぶのがコツです
         pipVideo.srcObject = stream;
-        pipVideo.load(); // これでメタデータを強制読み込み
-
-        // 2. ★0.3秒だけ「無」の時間を作る（メタデータ確定のための待ち時間）
-        // iOSはこの「ちょっとした待ち」がないとエラーを吐きます
-        await new Promise(resolve => setTimeout(resolve, 300));
-
-        // 3. 再生とPiPを一気に実行
-        await pipVideo.play();
+        
+        // play() の完了を待たずに、即座に requestPiP を呼びます
+        pipVideo.play(); 
         await pipVideo.requestPictureInPicture();
         
         console.log("PiP成功！");
 
     } catch (error) {
         console.error("PiPエラー:", error);
-        // 失敗しても、もう一度だけボタンを押せば動く可能性があります
-        alert("準備中です。もう一度ボタンを押してみてください。");
+        
+        // もしダメだったら、もう一度「その瞬間」にリトライする
+        // これがiPhoneでの「2回押し」を成功させる仕掛けです
+        try {
+            await pipVideo.requestPictureInPicture();
+        } catch (e) {
+            // ここでメッセージが出たら、ブラウザの設定やPWAの制限です
+            console.log("リトライ失敗");
+        }
     }
 }
     
