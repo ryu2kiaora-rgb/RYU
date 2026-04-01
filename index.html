@@ -1308,18 +1308,18 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     </script>
 
 <script>
-// --- 新・視認性重視設定 ---
+// --- 1. 設定と変数 ---
 const PIP_CONFIG = {
-    updateInterval: 3 * 60 * 1000, // 3分更新
-    fps: 12,                       // 動きを少し滑らかに
+    updateInterval: 3 * 60 * 1000,
+    fps: 12,
     colors: {
-        bg: '#ffffff',              // 純白の背景
-        panel: '#f8fafc',           // 薄いグレーのパネル
-        me: '#eff6ff',              // 自分の背景（薄い青）
-        textMain: '#1e293b',       // 濃いテキスト
-        textMe: '#2563eb',         // 自分のテキスト（濃い青）
-        gold: '#f59e0b',           // 順位用ゴールド
-        red: '#ef4444'             // ビーコン・通知用
+        bg: '#ffffff',
+        panel: '#f8fafc',
+        me: '#eff6ff',
+        textMain: '#1e293b',
+        textMe: '#2563eb',
+        gold: '#f59e0b',
+        red: '#ef4444'
     }
 };
 
@@ -1329,21 +1329,30 @@ let lastFetchTime = Date.now();
 const canvas = document.getElementById('ranking-canvas');
 const ctx = canvas.getContext('2d');
 const pipVideo = document.getElementById('pip-video');
-
-// 演出用変数
 let notifications = [];
 let shineEffect = { active: false, index: -1, alpha: 0 };
 
-// --- 1. GASからデータ取得 (3分おき + ゆらぎ) ---
+// --- 2. 角丸を描画するための「おまじない」（これが無いと止まります） ---
+CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.arcTo(x+w, y, x+w, y+h, r);
+    this.arcTo(x+w, y+h, x, y+h, r);
+    this.arcTo(x, y+h, x, y, r);
+    this.arcTo(x, y, x+w, y, r);
+    this.closePath();
+    this.fill();
+};
+
+// --- 3. データ取得 (3分おき + ゆらぎ) ---
 async function fetchRankingWithDelay() {
-    // アクセス分散のための0〜10秒のランダムな遅延
     const jitter = Math.random() * 10000;
     setTimeout(async () => {
         try {
+            // GAS_URL が定義されていることを前提としています
             const res = await fetch(GAS_URL + "?mode=ranking");
             const rawData = await res.json();
             
-            // 集計処理
             const summary = {};
             rawData.forEach(d => {
                 if(!summary[d.driverId]) summary[d.driverId] = { name: d.userName, amount: 0 };
@@ -1354,56 +1363,46 @@ async function fetchRankingWithDelay() {
                 id: id,
                 name: summary[id].name,
                 amount: summary[id].amount,
-                y: 400, // 初期位置
+                y: 400,
                 targetY: 0,
-                isMe: id === user?.uid // userが存在しない場合の安全策
+                // user?.uid または MY_ID など、ログインユーザー判別用
+                isMe: id === (typeof user !== 'undefined' ? user?.uid : null) 
             })).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
-            // 順位変動チェック（演出用）
             if (prevRankingData.length > 0) {
                 const myPrevRank = prevRankingData.findIndex(d => d.isMe);
                 const myNewRank = newList.findIndex(d => d.isMe);
                 if (myNewRank > myPrevRank && myPrevRank !== -1) {
                     addNotification("ランクダウン！挽回しましょう！");
                 } else if (myNewRank < myPrevRank && myPrevRank !== -1) {
-                    triggerShine(myNewRank); // ランクアップ時はキラリ
+                    triggerShine(myNewRank);
                 }
             }
 
             prevRankingData = JSON.parse(JSON.stringify(rankingData));
             rankingData = newList;
             lastFetchTime = Date.now();
-
         } catch (e) { console.error("Ranking Fetch Error:", e); }
     }, jitter);
 }
 
-// --- 2. 演出用関数 ---
 function addNotification(msg) {
-    notifications.push({ msg, timer: 120, alpha: 1 }); // 少し長めに表示
+    notifications.push({ msg, timer: 120, alpha: 1 });
 }
 
 function triggerShine(index) {
     shineEffect = { active: true, index, alpha: 1 };
 }
 
-// --- 3. スマホのバックグラウンド制限を回避する描画エンジン ---
-
-// requestAnimationFrameの代わりに、強制的に時間で動かすループを作る
-function startForceLoop() {
-    // 100ms(0.1秒)おきに強制描画。これなら他アプリの下でも止まりにくい
-    setInterval(() => {
-        renderCanvas();
-    }, 100); 
-}
-
+// --- 4. 描画エンジン (setIntervalによる強制駆動) ---
 function renderCanvas() {
-    // 背景（白）
+    if (!ctx) return;
+
+    // 背景
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // --- ビーコン（赤点滅） ---
-    // Date.now() を使うことで、ループが再開した瞬間に正しい色になる
+    // ビーコン（赤点滅）
     const isBeaming = Math.floor(Date.now() / 500) % 2 === 0;
     if (isBeaming) {
         ctx.fillStyle = PIP_CONFIG.colors.red;
@@ -1425,20 +1424,14 @@ function renderCanvas() {
     ctx.fillStyle = "#60a5fa";
     ctx.fillRect(0, 392, 300 * (1 - progress), 8);
 
-    // ランキング描画
+    // ランキングリスト
     rankingData.forEach((d, i) => {
         d.targetY = 75 + (i * 62);
-        // アニメーションの計算（d.yの更新）
-        if (Math.abs(d.targetY - d.y) > 0.1) {
-            d.y += (d.targetY - d.y) * 0.1;
-        }
+        if (typeof d.y === 'undefined') d.y = 400;
+        d.y += (d.targetY - d.y) * 0.1;
 
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
-        if (ctx.fillRoundedRect) {
-            ctx.fillRoundedRect(10, d.y, 280, 55, 12);
-        } else {
-            ctx.fillRect(10, d.y, 280, 55);
-        }
+        ctx.fillRoundedRect(10, d.y, 280, 55, 12);
         
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
         ctx.font = "bold 18px sans-serif";
@@ -1449,7 +1442,6 @@ function renderCanvas() {
         ctx.fillText(`¥${d.amount.toLocaleString()}`, 280, d.y + 36);
         ctx.textAlign = "left";
 
-        // キラリ演出
         if (shineEffect.active && shineEffect.index === i) {
             ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
             ctx.fillRect(10, d.y, 280, 55);
@@ -1471,8 +1463,34 @@ function renderCanvas() {
     notifications = notifications.filter(n => n.alpha > 0);
 }
 
-// --- 修正版：初期化の最後 ---
-// draw(); の呼び出しを消して、こちらに差し替え
+// --- 5. PiP起動と初期化 ---
+async function togglePiP() {
+    try {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+        } else {
+            const stream = canvas.captureStream(PIP_CONFIG.fps);
+            pipVideo.srcObject = stream;
+            await pipVideo.play();
+            await pipVideo.requestPictureInPicture();
+        }
+    } catch (e) {
+        console.error(e);
+        alert("PiPの起動に失敗しました。");
+    }
+}
+
+// イベント登録
+canvas.addEventListener('click', togglePiP);
+
+// ループ開始
+function startForceLoop() {
+    setInterval(renderCanvas, 100); // 0.1秒おきに強制描画
+}
+
+// 実行
+fetchRankingWithDelay();
+setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 startForceLoop();
 
 </script>
