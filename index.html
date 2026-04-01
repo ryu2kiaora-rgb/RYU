@@ -1387,148 +1387,93 @@ function triggerShine(index) {
     shineEffect = { active: true, index, alpha: 1 };
 }
 
-// --- 3. 新・Canvas描画エンジン（視認性特化） ---
-function draw() {
-    // 全体背景（白）
+// --- 3. スマホのバックグラウンド制限を回避する描画エンジン ---
+
+// requestAnimationFrameの代わりに、強制的に時間で動かすループを作る
+function startForceLoop() {
+    // 100ms(0.1秒)おきに強制描画。これなら他アプリの下でも止まりにくい
+    setInterval(() => {
+        renderCanvas();
+    }, 100); 
+}
+
+function renderCanvas() {
+    // 背景（白）
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // --- ビーコン（赤点滅）を左上に配置 ---
+    // --- ビーコン（赤点滅） ---
+    // Date.now() を使うことで、ループが再開した瞬間に正しい色になる
     const isBeaming = Math.floor(Date.now() / 500) % 2 === 0;
     if (isBeaming) {
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = PIP_CONFIG.colors.red;
         ctx.fillStyle = PIP_CONFIG.colors.red;
         ctx.beginPath(); 
-        ctx.arc(25, 30, 8, 0, Math.PI * 2); // 大きく、少し外側に
+        ctx.arc(25, 30, 8, 0, Math.PI * 2); 
         ctx.fill();
-        ctx.shadowBlur = 0; // 影をリセット
     }
 
-    // タイトル（大きく、ビーコンの隣に）
+    // タイトル
     ctx.fillStyle = PIP_CONFIG.colors.textMain;
-    ctx.font = "bold 22px sans-serif"; // サイズアップ
+    ctx.font = "bold 22px sans-serif";
     ctx.fillText("本日の売上順位", 50, 40);
 
-    // カウントダウンバー（下部）
+    // カウントダウンバー
     const elapsed = Date.now() - lastFetchTime;
     const progress = Math.min(elapsed / PIP_CONFIG.updateInterval, 1);
-    ctx.fillStyle = "#e2e8f0"; // 薄いグレー
-    ctx.fillRect(0, 392, 300, 8); // 太く
-    ctx.fillStyle = "#60a5fa"; // 青
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillRect(0, 392, 300, 8);
+    ctx.fillStyle = "#60a5fa";
     ctx.fillRect(0, 392, 300 * (1 - progress), 8);
 
-    // 各ドライバーの描画
+    // ランキング描画
     rankingData.forEach((d, i) => {
-        d.targetY = 75 + (i * 62); // 間隔を少し広げる
-        d.y += (d.targetY - d.y) * 0.1; // ヌルっと動く
+        d.targetY = 75 + (i * 62);
+        // アニメーションの計算（d.yの更新）
+        if (Math.abs(d.targetY - d.y) > 0.1) {
+            d.y += (d.targetY - d.y) * 0.1;
+        }
 
-        // 背景ボックス（ガラスパネル風）
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
-        // 枠線を追加してメリハリを出す
-        ctx.strokeStyle = d.isMe ? "#bfdbfe" : "#e2e8f0";
-        ctx.lineWidth = 1;
-        
         if (ctx.fillRoundedRect) {
-            ctx.fillRoundedRect(10, d.y, 280, 55, 12); // 大きく、丸みを帯びさせる
-            ctx.strokeRoundedRect(10, d.y, 280, 55, 12);
+            ctx.fillRoundedRect(10, d.y, 280, 55, 12);
         } else {
             ctx.fillRect(10, d.y, 280, 55);
-            ctx.strokeRect(10, d.y, 280, 55);
         }
         
-        // --- 文字（大幅サイズアップ） ---
-        // 順位
-        ctx.fillStyle = (i < 3) ? PIP_CONFIG.colors.gold : "#94a3b8"; // 上位はゴールド
-        ctx.font = "italic bold 26px sans-serif";
-        ctx.fillText(`${i + 1}`, 25, d.y + 38);
-
-        // 名前
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
-        ctx.font = "bold 18px sans-serif"; // 大きく
-        ctx.fillText(d.name, 65, d.y + 36);
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillText(`${i + 1}. ${d.name}`, 65, d.y + 36);
 
-        // 金額
-        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
-        ctx.font = "bold 20px monospace"; // 大きく、等幅フォント
-        ctx.textAlign = "right"; // 右寄せ
+        ctx.font = "bold 20px monospace";
+        ctx.textAlign = "right";
         ctx.fillText(`¥${d.amount.toLocaleString()}`, 280, d.y + 36);
-        ctx.textAlign = "left"; // リセット
+        ctx.textAlign = "left";
 
         // キラリ演出
         if (shineEffect.active && shineEffect.index === i) {
             ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
-            if (ctx.fillRoundedRect) {
-                ctx.fillRoundedRect(10, d.y, 280, 55, 12);
-            } else {
-                ctx.fillRect(10, d.y, 280, 55);
-            }
-            shineEffect.alpha -= 0.05;
+            ctx.fillRect(10, d.y, 280, 55);
+            shineEffect.alpha -= 0.1;
             if (shineEffect.alpha <= 0) shineEffect.active = false;
         }
     });
 
-    // 通知メッセージ（大きく、中央下に）
+    // 通知メッセージ
     notifications.forEach((n, i) => {
         ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
-        ctx.font = "bold 18px sans-serif"; // 大きく
+        ctx.font = "bold 18px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(n.msg, 150, 370);
         ctx.textAlign = "left";
         n.timer--;
-        if (n.timer < 30) n.alpha -= 0.05;
+        if (n.timer < 30) n.alpha -= 0.1;
     });
     notifications = notifications.filter(n => n.alpha > 0);
-
-    requestAnimationFrame(draw);
 }
 
-// 角丸四角形の補助関数（塗りつぶし）
-CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
-    this.beginPath();
-    this.moveTo(x+r, y);
-    this.arcTo(x+w, y, x+w, y+h, r);
-    this.arcTo(x+w, y+h, x, y+h, r);
-    this.arcTo(x, y+h, x, y, r);
-    this.arcTo(x, y, x+w, y, r);
-    this.closePath();
-    this.fill();
-};
-
-// 角丸四角形の補助関数（枠線）
-CanvasRenderingContext2D.prototype.strokeRoundedRect = function(x, y, w, h, r) {
-    this.beginPath();
-    this.moveTo(x+r, y);
-    this.arcTo(x+w, y, x+w, y+h, r);
-    this.arcTo(x+w, y+h, x, y+h, r);
-    this.arcTo(x, y+h, x, y, r);
-    this.arcTo(x, y, x+w, y, r);
-    this.closePath();
-    this.stroke();
-};
-
-// --- 4. PiP起動処理 ---
-async function togglePiP() {
-    try {
-        if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-        } else {
-            // captureStreamの引数（FPS）をCONFIGと同期
-            const stream = canvas.captureStream(PIP_CONFIG.fps);
-            pipVideo.srcObject = stream;
-            await pipVideo.play();
-            await pipVideo.requestPictureInPicture();
-        }
-    } catch (e) {
-        alert("PiPの起動に失敗しました。このブラウザは対応していない可能性があります。");
-    }
-}
-
-// --- 初期化 ---
-canvas.addEventListener('click', togglePiP);
-fetchRankingWithDelay();
-setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-draw();
+// --- 修正版：初期化の最後 ---
+// draw(); の呼び出しを消して、こちらに差し替え
+startForceLoop();
 
 </script>
     
