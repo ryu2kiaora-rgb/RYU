@@ -1504,30 +1504,27 @@ async function togglePiP() {
             return;
         }
 
-        // 1. ストリームを取得
+        // 1. ストリームをセット
         const stream = canvas.captureStream(30);
-        
-        // 2. ★iOSの「ユーザー操作」判定が生きているうちに、一気に畳み掛ける
-        // srcObjectを入れる前に play() を呼ぶのがコツです
         pipVideo.srcObject = stream;
-        
-        // play() の完了を待たずに、即座に requestPiP を呼びます
-        pipVideo.play(); 
-        await pipVideo.requestPictureInPicture();
-        
-        console.log("PiP成功！");
+
+        // 2. 【最重要】「準備ができたら即実行」という予約をその場で入れる
+        // 一度だけ実行されるように { once: true } を使います
+        pipVideo.addEventListener('loadedmetadata', async () => {
+            try {
+                await pipVideo.play();
+                await pipVideo.requestPictureInPicture();
+                console.log("PiP成功！");
+            } catch (e) {
+                console.error("PiPリクエスト失敗:", e);
+            }
+        }, { once: true });
+
+        // 3. ブラウザに読み込みを強制開始させる
+        pipVideo.load();
 
     } catch (error) {
         console.error("PiPエラー:", error);
-        
-        // もしダメだったら、もう一度「その瞬間」にリトライする
-        // これがiPhoneでの「2回押し」を成功させる仕掛けです
-        try {
-            await pipVideo.requestPictureInPicture();
-        } catch (e) {
-            // ここでメッセージが出たら、ブラウザの設定やPWAの制限です
-            console.log("リトライ失敗");
-        }
     }
 }
     
