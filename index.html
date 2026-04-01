@@ -1495,38 +1495,40 @@ function renderCanvas() {
 function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }); }
 function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
 
+// 1. ページ読み込み時、またはデータ受信時に「裏側」で準備を済ませておく
+function setupPiP() {
+    const pipVideo = document.getElementById('pip-video');
+    const stream = canvas.captureStream(30);
+    pipVideo.srcObject = stream;
+    // 裏で「再生状態」にしておく（透明なので見えません）
+    pipVideo.play().catch(() => {
+        console.log("自動再生はブロックされましたが、準備はOKです");
+    });
+}
+
+// 2. ボタンを押した時は「浮かせる」だけにする
 async function togglePiP() {
     const pipVideo = document.getElementById('pip-video');
     
     try {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
-            return;
+        } else {
+            // ★重要：ボタンを押した瞬間に「request」だけを呼ぶ
+            // すでに play() 状態であれば、iPhoneでも即座に浮き上がります
+            await pipVideo.requestPictureInPicture();
         }
-
-        // 1. ストリームをセット
+    } catch (error) {
+        // もし準備が間に合っていなかったら、その場でもう一度セットアップ
         const stream = canvas.captureStream(30);
         pipVideo.srcObject = stream;
-
-        // 2. 【最重要】「準備ができたら即実行」という予約をその場で入れる
-        // 一度だけ実行されるように { once: true } を使います
-        pipVideo.addEventListener('loadedmetadata', async () => {
-            try {
-                await pipVideo.play();
-                await pipVideo.requestPictureInPicture();
-                console.log("PiP成功！");
-            } catch (e) {
-                console.error("PiPリクエスト失敗:", e);
-            }
-        }, { once: true });
-
-        // 3. ブラウザに読み込みを強制開始させる
-        pipVideo.load();
-
-    } catch (error) {
-        console.error("PiPエラー:", error);
+        await pipVideo.play();
+        await pipVideo.requestPictureInPicture();
     }
 }
+
+// アプリ起動時に実行しておく
+setupPiP();
     
 canvas.addEventListener('click', togglePiP);
 fetchRankingWithDelay();
