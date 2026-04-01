@@ -80,7 +80,9 @@
             <div class="absolute top-4 left-4 z-[500] w-[150px] pointer-events-none">
     <div id="ranking-list" class="pointer-events-auto">
         <canvas id="ranking-canvas" width="300" height="400" style="width:100%; border-radius:12px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);"></canvas>
-        <video id="pip-video" autoplay playsinline muted style="display:none;"></video>
+        <video id="pip-video" autoplay playsinline muted 
+  style="position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none;">
+</video>
     </div>
 </div>
     </div>
@@ -1497,14 +1499,29 @@ function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; 
 
 async function togglePiP() {
     try {
-        if (document.pictureInPictureElement) await document.exitPictureInPicture();
-        else {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+        } else {
+            // 1. Canvasから映像ストリームを取得
             const stream = canvas.captureStream(PIP_CONFIG.fps);
             pipVideo.srcObject = stream;
-            await pipVideo.play();
+
+            // 2. ★重要：iOSでは「再生が開始された」ことを確認してからPiPを呼ぶ必要があります
+            await new Promise((resolve) => {
+                pipVideo.onloadedmetadata = async () => {
+                    await pipVideo.play();
+                    resolve();
+                };
+            });
+
+            // 3. PiPをリクエスト
             await pipVideo.requestPictureInPicture();
         }
-    } catch (e) { console.error(e); }
+    } catch (error) {
+        console.error("PiPの切り替えに失敗:", error);
+        // 万が一失敗した時のために、普通の再生だけは試みる
+        pipVideo.play().catch(() => {});
+    }
 }
 
 canvas.addEventListener('click', togglePiP);
