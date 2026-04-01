@@ -1502,17 +1502,27 @@ async function togglePiP() {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
         } else {
-            // 1. Canvasから映像ストリームを取得
+            // 1. ストリームをセット
             const stream = canvas.captureStream(PIP_CONFIG.fps);
             pipVideo.srcObject = stream;
 
-            // 2. ★重要：iOSでは「再生が開始された」ことを確認してからPiPを呼ぶ必要があります
-            await new Promise((resolve) => {
-                pipVideo.onloadedmetadata = async () => {
-                    await pipVideo.play();
-                    resolve();
-                };
-            });
+            // 2. 【iOS直結版】待ち合わせをせず、一気に実行
+            // ※これなら「ユーザーが押した」という判定が途切れにくいです
+            pipVideo.play(); 
+            
+            // 少しだけ（0.1秒）待ってからPiP
+            setTimeout(async () => {
+                try {
+                    await pipVideo.requestPictureInPicture();
+                } catch (e) {
+                    console.error("PiPリクエスト失敗:", e);
+                }
+            }, 100);
+        }
+    } catch (error) {
+        console.error("エラー:", error);
+    }
+}
 
             // 3. PiPをリクエスト
             await pipVideo.requestPictureInPicture();
