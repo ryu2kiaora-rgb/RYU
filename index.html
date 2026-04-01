@@ -1394,11 +1394,11 @@ function triggerShine(index) {
     shineEffect = { active: true, index, alpha: 1 };
 }
 
-// --- 4. 描画エンジン (setIntervalによる強制駆動) ---
+// --- 視認性・レイアウト改善版（名前カット機能付き） ---
 function renderCanvas() {
     if (!ctx) return;
 
-    // 背景
+    // 背景（白）
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1430,21 +1430,57 @@ function renderCanvas() {
         if (typeof d.y === 'undefined') d.y = 400;
         d.y += (d.targetY - d.y) * 0.1;
 
+        // 背景ボックス
         ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
         ctx.fillRoundedRect(10, d.y, 280, 55, 12);
         
-        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
-        ctx.font = "bold 18px sans-serif";
-        ctx.fillText(`${i + 1}. ${d.name}`, 65, d.y + 36);
+        // --- 1. メダル・順位の描画 ---
+        if (i === 0) {
+            ctx.font = "30px sans-serif";
+            ctx.fillText("🥇", 18, d.y + 38);
+        } else if (i === 1) {
+            ctx.font = "30px sans-serif";
+            ctx.fillText("🥈", 18, d.y + 38);
+        } else if (i === 2) {
+            ctx.font = "30px sans-serif";
+            ctx.fillText("🥉", 18, d.y + 38);
+        } else {
+            ctx.fillStyle = "#94a3b8";
+            ctx.font = "italic bold 24px sans-serif";
+            ctx.fillText(`${i + 1}`, 25, d.y + 38);
+        }
 
+        // --- 2. 金額（先に幅を確保するために右側に描画） ---
+        const priceText = `¥${d.amount.toLocaleString()}`;
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
         ctx.font = "bold 20px monospace";
         ctx.textAlign = "right";
-        ctx.fillText(`¥${d.amount.toLocaleString()}`, 280, d.y + 36);
-        ctx.textAlign = "left";
+        ctx.fillText(priceText, 280, d.y + 36);
+        
+        // 金額の文字列の幅を計算（これより左側に名前を収める）
+        const priceWidth = ctx.measureText(priceText).width;
+        ctx.textAlign = "left"; // リセット
 
+        // --- 3. 名前の描画（長い場合はカット） ---
+        ctx.font = "bold 18px sans-serif";
+        let displayName = d.name;
+        const maxNameWidth = 280 - 65 - priceWidth - 15; // 左余白、右金額、間隔15pxを引く
+
+        // 名前が長すぎる場合に1文字ずつ削って「...」を付ける
+        if (ctx.measureText(displayName).width > maxNameWidth) {
+            while (ctx.measureText(displayName + "...").width > maxNameWidth && displayName.length > 0) {
+                displayName = displayName.slice(0, -1);
+            }
+            displayName += "...";
+        }
+
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
+        ctx.fillText(displayName, 62, d.y + 36);
+
+        // キラリ演出
         if (shineEffect.active && shineEffect.index === i) {
             ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
-            ctx.fillRect(10, d.y, 280, 55);
+            ctx.fillRoundedRect(10, d.y, 280, 55, 12);
             shineEffect.alpha -= 0.1;
             if (shineEffect.alpha <= 0) shineEffect.active = false;
         }
@@ -1453,7 +1489,7 @@ function renderCanvas() {
     // 通知メッセージ
     notifications.forEach((n, i) => {
         ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
-        ctx.font = "bold 18px sans-serif";
+        ctx.font = "bold 20px sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(n.msg, 150, 370);
         ctx.textAlign = "left";
@@ -1462,7 +1498,6 @@ function renderCanvas() {
     });
     notifications = notifications.filter(n => n.alpha > 0);
 }
-
 // --- 5. PiP起動と初期化 ---
 async function togglePiP() {
     try {
