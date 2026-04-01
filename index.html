@@ -1406,8 +1406,8 @@ function renderCanvas() {
     ctx.fillRect(0, 0, canvas.width, canvas.height); // キャンバス全体を白く塗る
 
     // --- 3. 縮小と位置の微調整 ---
-    ctx.scale(0, 0);      // ★全体を0.8倍に小さくするときは0.8に
-    ctx.translate(35, 25);    // ★縮小して空いたスペース分、少し右下にずらす
+    ctx.scale(1, 1);      // ★全体を0.8倍に小さくするときは0.8に
+    ctx.translate(0, 0);    // ★縮小して空いたスペース分、少し右下にずらす
 
     // --- 4. ビーコン（ここからは縮小された世界で描画される） ---
     if (Math.floor(Date.now() / 500) % 2 === 0) {
