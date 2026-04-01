@@ -99,12 +99,9 @@
     </button>
                 
 </div>
-            <div class="fixed bottom-6 right-4 flex flex-col gap-3 z-[1000]"> <button id="heat-toggle-btn" onclick="toggleHeat()" 
-        class="w-10 h-10 bg-gray-500/80 flex items-center justify-center rounded-xl shadow-lg text-white border border-white/30 active:scale-90 transition-all">
-        <i class="fas fa-satellite-dish text-base"></i>
-    </button>
 
-              </div>
+
+            </div>
 
             <!-- Start Shift UI Overlay -->
             <div id="shift-overlay">
@@ -1164,68 +1161,77 @@ document.getElementById('btn-recenter').onclick = async () => {
 };
         // -----------------------
 
-// 1. 需要予測のON/OFF状態を管理する変数
-let heatEnabled = false;
+        // ===== ここに追加 =====
 
-// 2. ボタンが押された時の処理（色の切り替えと実行）
-function toggleHeat() {
-    heatEnabled = !heatEnabled;
-    const btn = document.getElementById('heat-toggle-btn');
-    
-    if (heatEnabled) {
-        // ON：オレンジ色（点灯）にして、少し目立たせる
-        btn.classList.replace('bg-gray-500/80', 'bg-orange-500');
-        btn.classList.add('ring-2', 'ring-orange-300');
-        
-        // データを読み込む
-        loadPrediction();
-    } else {
-        // OFF：落ち着いた半透明グレーに戻す
-        btn.classList.replace('bg-orange-500', 'bg-gray-500/80');
-        btn.classList.remove('ring-2', 'ring-orange-300');
-        
-        // ヒートマップを地図から消す
-        if (typeof heatLayer !== 'undefined' && heatLayer) {
-            map.removeLayer(heatLayer);
-        }
-    }
+const heatBtn=document.createElement("button")
+
+heatBtn.innerText="需要OFF"
+
+heatBtn.className="px-3 py-2 rounded shadow text-sm font-bold bg-white"
+
+heatBtn.style.position="absolute"
+heatBtn.style.right="20px"
+heatBtn.style.bottom="80px"
+heatBtn.style.zIndex="1200"
+
+document.body.appendChild(heatBtn)
+
+heatBtn.onclick=()=>{
+
+heatEnabled=!heatEnabled
+
+if(heatEnabled){
+
+heatBtn.innerText="需要ON 🔥"
+heatBtn.classList.add("bg-red-500","text-white")
+
+loadPrediction()
+
+}else{
+
+heatBtn.innerText="需要OFF"
+
+heatBtn.classList.remove("bg-red-500","text-white")
+
+if(heatLayer) map.removeLayer(heatLayer)
+
 }
 
-// 3. 10分おきに自動更新するタイマー（ONの時だけ実行）
-setInterval(() => {
-    if (heatEnabled) {
-        loadPrediction();
-    }
-}, 600000); // 600,000ミリ秒 = 10分
+}
+// ===== ここまで追加 =====
 
-// 4. 需要予測データを取得して地図に描画する関数
-async function loadPrediction() {
-    try {
-        const res = await fetch(GAS_URL + "?mode=predict");
-        const data = await res.json();
-        console.log("需要予測データ受信:", data);
 
-        // すでに表示されているレイヤーがあれば消す
-        if (typeof heatLayer !== 'undefined' && heatLayer) {
-            map.removeLayer(heatLayer);
-        }
+        setInterval(()=>{
 
-        // データをLeaflet.heatが使える形式 [lat, lng, intensity] に変換
-        const heatData = data.map(item => [
-            item.lat,
-            item.lng,
-            item.amount || 1 // amountがない場合は1として扱う
-        ]);
+if(heatEnabled){
 
-        // ヒートマップを作成して地図に追加
-        heatLayer = L.heatLayer(heatData, {
-            radius: 25,
-            blur: 15
-        }).addTo(map);
-        
-    } catch (error) {
-        console.error("需要予測の取得に失敗:", error);
-    }
+loadPrediction()
+
+}
+
+},600000)
+
+        async function loadPrediction() {
+
+  const res = await fetch(GAS_URL + "?mode=predict");
+  const data = await res.json();
+
+  console.log(data);
+
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+  }
+
+  const heatData = data.map(item => [
+    item.lat,
+    item.lng,
+    item.amount
+  ]);
+
+  heatLayer = L.heatLayer(heatData, {
+    radius: 25,
+    blur: 15
+  }).addTo(map);
 }
         
         window.onload = initApp;
