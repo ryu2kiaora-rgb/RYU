@@ -1507,29 +1507,25 @@ async function togglePiP() {
             return;
         }
 
-        // 1. Canvasから映像を取得
-        // PIP_CONFIG.fps がエラーになる場合は 30 に書き換えてください
-        const fps = (typeof PIP_CONFIG !== 'undefined' && PIP_CONFIG.fps) ? PIP_CONFIG.fps : 30;
-        const stream = canvas.captureStream(fps);
+        // 1. ストリームをセット
+        const stream = canvas.captureStream(30);
         pipVideo.srcObject = stream;
 
-        // 2. ビデオを再生（これが無いと真っ黒になります）
-        await pipVideo.play();
-
-        // 3. 画面を浮かせる（PiPリクエスト）
-        // iOSのために少しだけ（100ms）待ってから実行します
-        setTimeout(async () => {
-            try {
-                await pipVideo.requestPictureInPicture();
-                console.log("PiP成功！");
-            } catch (e) {
-                console.error("PiPリクエスト失敗:", e);
-                alert("このブラウザではPiPを開始できませんでした。");
-            }
-        }, 100);
+        // 2. 【iOS突破ポイント】再生と同時にPiPをリクエストする
+        // 間に await や setTimeout を挟まず、一気に命令を送ります
+        pipVideo.play();
+        
+        await pipVideo.requestPictureInPicture();
+        console.log("PiP成功！");
 
     } catch (error) {
-        console.error("PiPの切り替えに失敗:", error);
+        console.error("PiPエラー:", error);
+        // iOSでよくある「操作が短すぎた」エラー対策として、もう一度だけ試みる
+        try {
+            await pipVideo.requestPictureInPicture();
+        } catch (e) {
+            alert("このブラウザ（またはホーム画面版）ではPiPを開始できませんでした。Safariのタブで試してみてください。");
+        }
     }
 }
     
