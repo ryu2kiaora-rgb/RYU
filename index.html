@@ -40,6 +40,19 @@
         }
 
         #edit-map { height: 300px; width: 100%; border-radius: 16px; margin-bottom: 12px; }
+
+        /* --- PiP Ranking Styles --- */
+        #ranking-canvas { 
+            width: 100%; height: auto; 
+            border-radius: 12px; 
+            background: #1e293b; /* 濃い紺色 */
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .pip-hint {
+            font-size: 8px; color: #94a3b8; text-align: center; margin-top: 4px;
+        }
+        
     </style>
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
@@ -67,7 +80,9 @@
             <div class="absolute top-4 left-4 z-[500]">
     <div class="glass-panel p-2 rounded-xl shadow-lg w-36 border border-white/50">
         <div id="ranking-list" class="space-y-1 text-[10px]">
-            <p class="text-[9px] text-gray-400 italic">昼12時ﾘｾｯﾄ､売上計上で更新..</p>
+            <canvas id="ranking-canvas" width="300" height="400"></canvas>
+            <p class="pip-hint">タップして小窓(PiP)で表示</p>
+            <video id="pip-video" autoplay playsinline muted style="display: none;"></video>
         </div>
     </div>
 </div>
@@ -1292,123 +1307,180 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
         
     </script>
 
-   <script>
-const MY_ID = localStorage.getItem("driverId") || null;
-let lastUpdate = null;
-let currentSlide = 0;
-const slideInterval = 8000; // 8秒ごとにスライド
-const updateInterval = 15 * 60 * 1000; // 15分ごとにGASからデータ取得
+  <script>
+// --- 設定値 ---
+const PIP_CONFIG = {
+    updateInterval: 3 * 60 * 1000, // 3分更新
+    fps: 10,                       // Canvasの描画速度
+    colors: {
+        bg: '#1e293b',
+        me: '#3b82f6',
+        other: '#334155',
+        gold: '#fbbf24',
+        text: '#f8fafc'
+    }
+};
 
-const slideTypes = ["売上", "平均単価", "件数", "高単価"];
+let rankingData = [];
+let prevRankingData = [];
+let lastFetchTime = Date.now();
+const canvas = document.getElementById('ranking-canvas');
+const ctx = canvas.getContext('2d');
+const pipVideo = document.getElementById('pip-video');
 
-async function loadRankingData() {
-  try {
-    const res = await fetch(GAS_URL + "?mode=ranking");
-    const data = await res.json();
+// 演出用変数
+let notifications = [];
+let shineEffect = { active: false, index: -1, alpha: 0 };
 
-    // 集計
-    const summary = {};
-    data.forEach(d=>{
-      if(!summary[d.driverId]){
-        summary[d.driverId] = {userName: d.userName, amount:0, count:0, max:0};
-      }
-      summary[d.driverId].amount += d.amount;
-      summary[d.driverId].count += 1;
-      summary[d.driverId].max = Math.max(summary[d.driverId].max, d.amount);
-    });
+// --- 1. GASからデータ取得 (3分おき + ゆらぎ) ---
+async function fetchRankingWithDelay() {
+    // 30人の同時アクセスを避けるため、0〜10秒のランダムな遅延を入れる
+    const jitter = Math.random() * 10000;
+    setTimeout(async () => {
+        try {
+            const res = await fetch(GAS_URL + "?mode=ranking");
+            const rawData = await res.json();
+            
+            // 集計処理
+            const summary = {};
+            rawData.forEach(d => {
+                if(!summary[d.driverId]) summary[d.driverId] = { name: d.userName, amount: 0 };
+                summary[d.driverId].amount += d.amount;
+            });
 
-    const arr = Object.keys(summary).map(id=>{
-      const v = summary[id];
-      return {
-        driverId: id,
-        userName: v.userName,
-        totalAmount: v.amount,
-        count: v.count,
-        avgAmount: Math.round(v.amount/v.count),
-        maxAmount: v.max
-      };
-    });
+            const newList = Object.keys(summary).map(id => ({
+                id: id,
+                name: summary[id].name,
+                amount: summary[id].amount,
+                y: 400, // 初期位置
+                targetY: 0,
+                isMe: id === user?.uid
+            })).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
-    lastUpdate = new Date();
-    return arr;
-  } catch(e){
-    console.error("ランキング取得エラー", e);
-    return [];
-  }
+            // 順位変動チェック（転落通知演出用）
+            if (prevRankingData.length > 0) {
+                const myPrevRank = prevRankingData.findIndex(d => d.isMe);
+                const myNewRank = newList.findIndex(d => d.isMe);
+                if (myNewRank > myPrevRank && myPrevRank !== -1) {
+                    addNotification("順位ダウン！踏ん張り時です！");
+                } else if (myNewRank < myPrevRank && myNewRank !== -1) {
+                    triggerShine(myNewRank); // ランクアップ時はキラリ
+                }
+            }
+
+            prevRankingData = JSON.parse(JSON.stringify(rankingData));
+            rankingData = newList;
+            lastFetchTime = Date.now();
+
+        } catch (e) { console.error("Ranking Fetch Error:", e); }
+    }, jitter);
 }
 
-function renderRanking(data){
-  const box = document.getElementById("ranking-list");
-  if(!box || data.length===0) return;
+// --- 2. 演出用関数 ---
+function addNotification(msg) {
+    notifications.push({ msg, timer: 100, alpha: 1 });
+}
 
-  const type = slideTypes[currentSlide % slideTypes.length];
+function triggerShine(index) {
+    shineEffect = { active: true, index, alpha: 1 };
+}
 
-  // ソート
-  let sorted = [];
-  switch(type){
-    case "売上": sorted = data.sort((a,b)=>b.totalAmount - a.totalAmount); break;
-    case "平均単価": sorted = data.sort((a,b)=>b.avgAmount - a.avgAmount); break;
-    case "件数": sorted = data.sort((a,b)=>b.count - a.count); break;
-    case "高単価": sorted = data.sort((a,b)=>b.maxAmount - a.maxAmount); break;
-  }
+// --- 3. Canvas描画エンジン ---
+function draw() {
+    ctx.fillStyle = PIP_CONFIG.colors.bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  const top5 = sorted.slice(0,5);
+    // タイトル
+    ctx.fillStyle = PIP_CONFIG.colors.gold;
+    ctx.font = "bold 18px sans-serif";
+    ctx.fillText("🏆 売上ランキング TOP5", 20, 40);
 
-  // タイトルに何のランキングかを明示
-  let html = `<div style="font-weight:bold;margin-bottom:6px; color:#FFD700;">
-      <i class="fas fa-trophy mr-1"></i>${type}Ranking TOP5
-    </div>`;
+    // カウントダウンバー (GPS維持のための動的要素)
+    const elapsed = Date.now() - lastFetchTime;
+    const progress = Math.min(elapsed / PIP_CONFIG.updateInterval, 1);
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(0, 395, 300, 5);
+    ctx.fillStyle = "#60a5fa";
+    ctx.fillRect(0, 395, 300 * (1 - progress), 5);
 
-  top5.forEach((d,i)=>{
-    const isMe = String(d.driverId) === String(MY_ID);
-    let value = 0;
-    switch(type){
-      case "売上": value = d.totalAmount; break;
-      case "平均単価": value = d.avgAmount; break;
-      case "件数": value = d.count; break;
-      case "高単価": value = d.maxAmount; break;
+    // 各ドライバーの描画
+    rankingData.forEach((d, i) => {
+        d.targetY = 70 + (i * 60);
+        d.y += (d.targetY - d.y) * 0.1; // ヌルっと動くアニメーション
+
+        // 背景ボックス
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.other;
+        ctx.roundRect ? ctx.fillRoundedRect(15, d.y, 270, 50, 10) : ctx.fillRect(15, d.y, 270, 50);
+        
+        // 文字
+        ctx.fillStyle = PIP_CONFIG.colors.text;
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(`${i + 1}. ${d.name}`, 30, d.y + 32);
+        ctx.font = "14px monospace";
+        ctx.fillText(`¥${d.amount.toLocaleString()}`, 200, d.y + 32);
+
+        // キラリ演出
+        if (shineEffect.active && shineEffect.index === i) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
+            ctx.fillRect(15, d.y, 270, 50);
+            shineEffect.alpha -= 0.05;
+            if (shineEffect.alpha <= 0) shineEffect.active = false;
+        }
+    });
+
+    // 通知メッセージ
+    notifications.forEach((n, i) => {
+        ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText(n.msg, 20, 380);
+        n.timer--;
+        if (n.timer < 20) n.alpha -= 0.05;
+    });
+    notifications = notifications.filter(n => n.alpha > 0);
+
+    // LIVE点滅 (GPS切断防止)
+    if (Math.floor(Date.now() / 500) % 2 === 0) {
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath(); ctx.arc(270, 35, 5, 0, Math.PI*2); ctx.fill();
     }
 
-    html += `<div style="display:flex;justify-content:space-between;padding:2px 0;
-      background:${isMe?"rgba(255,215,0,0.2)":"transparent"};
-      font-weight:${i===0?"bold":"normal"};">
-      <span>${i+1}. ${d.userName}</span>
-      <span>${value}${type==="件数"?"件":"円"}</span>
-      ${isMe?" ←自分":""}
-    </div>`;
-  });
-
-  // 更新時間の色を濃くして見やすく
-  if(lastUpdate){
-    const h = String(lastUpdate.getHours()).padStart(2,'0');
-    const m = String(lastUpdate.getMinutes()).padStart(2,'0');
-    html += `<div style="margin-top:4px;font-size:10px;color:#ff0000;">
-      更新: ${h}:${m} （15分毎 自動更新）
-    </div>`;
-  }
-
-  box.innerHTML = html;
-  currentSlide++;
+    requestAnimationFrame(draw);
 }
 
-async function startGASRanking(){
-  let data = await loadRankingData();
-  renderRanking(data);
+// 角丸四角形の補助関数
+CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.arcTo(x+w, y, x+w, y+h, r);
+    this.arcTo(x+w, y+h, x, y+h, r);
+    this.arcTo(x, y+h, x, y, r);
+    this.arcTo(x, y, x+w, y, r);
+    this.closePath();
+    this.fill();
+};
 
-  // スライド切替
-  setInterval(()=>renderRanking(data), slideInterval);
-
-  // 15分ごとのデータ更新
-  setInterval(async ()=>{
-    data = await loadRankingData();
-    currentSlide = 0; // スライドリセット
-  }, updateInterval);
+// --- 4. PiP起動処理 ---
+async function togglePiP() {
+    try {
+        if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+        } else {
+            const stream = canvas.captureStream(PIP_CONFIG.fps);
+            pipVideo.srcObject = stream;
+            await pipVideo.play();
+            await pipVideo.requestPictureInPicture();
+        }
+    } catch (e) {
+        alert("PiPの起動に失敗しました。ブラウザの設定を確認してください。");
+    }
 }
 
-// 元ランキング表示関数があればコメントアウトする
-// updateRankingList(snapshot) { ... }
+// --- 初期化 ---
+canvas.addEventListener('click', togglePiP);
+fetchRankingWithDelay();
+setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
+draw();
 
-startGASRanking();
 </script>
     
 </body>
