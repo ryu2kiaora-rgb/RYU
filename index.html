@@ -1501,31 +1501,34 @@ async function togglePiP() {
     const pipVideo = document.getElementById('pip-video');
     
     try {
-        // すでに浮いている場合は閉じる
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
             return;
         }
 
-        // 1. ストリームをセット
+        // 1. Canvasから映像ストリームを取得してセット
         const stream = canvas.captureStream(30);
         pipVideo.srcObject = stream;
 
-        // 2. 【iOS突破ポイント】再生と同時にPiPをリクエストする
-        // 間に await や setTimeout を挟まず、一気に命令を送ります
-        pipVideo.play();
-        
-        await pipVideo.requestPictureInPicture();
-        console.log("PiP成功！");
+        // 2. 【最重要】ビデオの準備ができるのを「イベント」で待つ
+        pipVideo.onloadedmetadata = async () => {
+            try {
+                // 再生を開始
+                await pipVideo.play();
+                // 準備ができたら即座にPiPリクエスト
+                await pipVideo.requestPictureInPicture();
+                console.log("PiP成功！");
+            } catch (e) {
+                console.error("PiPリクエスト失敗:", e);
+                alert("PiPを開始できませんでした。もう一度お試しください。");
+            }
+        };
+
+        // 3. 一部のブラウザ用に明示的にロードを促す
+        pipVideo.load();
 
     } catch (error) {
         console.error("PiPエラー:", error);
-        // iOSでよくある「操作が短すぎた」エラー対策として、もう一度だけ試みる
-        try {
-            await pipVideo.requestPictureInPicture();
-        } catch (e) {
-            alert("このブラウザ（またはホーム画面版）ではPiPを開始できませんでした。Safariのタブで試してみてください。");
-        }
     }
 }
     
