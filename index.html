@@ -1307,17 +1307,19 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
         
     </script>
 
-  <script>
-// --- 設定値 ---
+<script>
+// --- 新・視認性重視設定 ---
 const PIP_CONFIG = {
     updateInterval: 3 * 60 * 1000, // 3分更新
-    fps: 10,                       // Canvasの描画速度
+    fps: 12,                       // 動きを少し滑らかに
     colors: {
-        bg: '#1e293b',
-        me: '#3b82f6',
-        other: '#334155',
-        gold: '#fbbf24',
-        text: '#f8fafc'
+        bg: '#ffffff',              // 純白の背景
+        panel: '#f8fafc',           // 薄いグレーのパネル
+        me: '#eff6ff',              // 自分の背景（薄い青）
+        textMain: '#1e293b',       // 濃いテキスト
+        textMe: '#2563eb',         // 自分のテキスト（濃い青）
+        gold: '#f59e0b',           // 順位用ゴールド
+        red: '#ef4444'             // ビーコン・通知用
     }
 };
 
@@ -1334,7 +1336,7 @@ let shineEffect = { active: false, index: -1, alpha: 0 };
 
 // --- 1. GASからデータ取得 (3分おき + ゆらぎ) ---
 async function fetchRankingWithDelay() {
-    // 30人の同時アクセスを避けるため、0〜10秒のランダムな遅延を入れる
+    // アクセス分散のための0〜10秒のランダムな遅延
     const jitter = Math.random() * 10000;
     setTimeout(async () => {
         try {
@@ -1354,16 +1356,16 @@ async function fetchRankingWithDelay() {
                 amount: summary[id].amount,
                 y: 400, // 初期位置
                 targetY: 0,
-                isMe: id === user?.uid
+                isMe: id === user?.uid // userが存在しない場合の安全策
             })).sort((a, b) => b.amount - a.amount).slice(0, 5);
 
-            // 順位変動チェック（転落通知演出用）
+            // 順位変動チェック（演出用）
             if (prevRankingData.length > 0) {
                 const myPrevRank = prevRankingData.findIndex(d => d.isMe);
                 const myNewRank = newList.findIndex(d => d.isMe);
                 if (myNewRank > myPrevRank && myPrevRank !== -1) {
-                    addNotification("順位ダウン！踏ん張り時です！");
-                } else if (myNewRank < myPrevRank && myNewRank !== -1) {
+                    addNotification("ランクダウン！挽回しましょう！");
+                } else if (myNewRank < myPrevRank && myPrevRank !== -1) {
                     triggerShine(myNewRank); // ランクアップ時はキラリ
                 }
             }
@@ -1378,76 +1380,110 @@ async function fetchRankingWithDelay() {
 
 // --- 2. 演出用関数 ---
 function addNotification(msg) {
-    notifications.push({ msg, timer: 100, alpha: 1 });
+    notifications.push({ msg, timer: 120, alpha: 1 }); // 少し長めに表示
 }
 
 function triggerShine(index) {
     shineEffect = { active: true, index, alpha: 1 };
 }
 
-// --- 3. Canvas描画エンジン ---
+// --- 3. 新・Canvas描画エンジン（視認性特化） ---
 function draw() {
+    // 全体背景（白）
     ctx.fillStyle = PIP_CONFIG.colors.bg;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // タイトル
-    ctx.fillStyle = PIP_CONFIG.colors.gold;
-    ctx.font = "bold 18px sans-serif";
-    ctx.fillText("🏆 売上ランキング TOP5", 20, 40);
+    // --- ビーコン（赤点滅）を左上に配置 ---
+    const isBeaming = Math.floor(Date.now() / 500) % 2 === 0;
+    if (isBeaming) {
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = PIP_CONFIG.colors.red;
+        ctx.fillStyle = PIP_CONFIG.colors.red;
+        ctx.beginPath(); 
+        ctx.arc(25, 30, 8, 0, Math.PI * 2); // 大きく、少し外側に
+        ctx.fill();
+        ctx.shadowBlur = 0; // 影をリセット
+    }
 
-    // カウントダウンバー (GPS維持のための動的要素)
+    // タイトル（大きく、ビーコンの隣に）
+    ctx.fillStyle = PIP_CONFIG.colors.textMain;
+    ctx.font = "bold 22px sans-serif"; // サイズアップ
+    ctx.fillText("本日の売上順位", 50, 40);
+
+    // カウントダウンバー（下部）
     const elapsed = Date.now() - lastFetchTime;
     const progress = Math.min(elapsed / PIP_CONFIG.updateInterval, 1);
-    ctx.fillStyle = "#334155";
-    ctx.fillRect(0, 395, 300, 5);
-    ctx.fillStyle = "#60a5fa";
-    ctx.fillRect(0, 395, 300 * (1 - progress), 5);
+    ctx.fillStyle = "#e2e8f0"; // 薄いグレー
+    ctx.fillRect(0, 392, 300, 8); // 太く
+    ctx.fillStyle = "#60a5fa"; // 青
+    ctx.fillRect(0, 392, 300 * (1 - progress), 8);
 
     // 各ドライバーの描画
     rankingData.forEach((d, i) => {
-        d.targetY = 70 + (i * 60);
-        d.y += (d.targetY - d.y) * 0.1; // ヌルっと動くアニメーション
+        d.targetY = 75 + (i * 62); // 間隔を少し広げる
+        d.y += (d.targetY - d.y) * 0.1; // ヌルっと動く
 
-        // 背景ボックス
-        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.other;
-        ctx.roundRect ? ctx.fillRoundedRect(15, d.y, 270, 50, 10) : ctx.fillRect(15, d.y, 270, 50);
+        // 背景ボックス（ガラスパネル風）
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.me : PIP_CONFIG.colors.panel;
+        // 枠線を追加してメリハリを出す
+        ctx.strokeStyle = d.isMe ? "#bfdbfe" : "#e2e8f0";
+        ctx.lineWidth = 1;
         
-        // 文字
-        ctx.fillStyle = PIP_CONFIG.colors.text;
-        ctx.font = "bold 16px sans-serif";
-        ctx.fillText(`${i + 1}. ${d.name}`, 30, d.y + 32);
-        ctx.font = "14px monospace";
-        ctx.fillText(`¥${d.amount.toLocaleString()}`, 200, d.y + 32);
+        if (ctx.fillRoundedRect) {
+            ctx.fillRoundedRect(10, d.y, 280, 55, 12); // 大きく、丸みを帯びさせる
+            ctx.strokeRoundedRect(10, d.y, 280, 55, 12);
+        } else {
+            ctx.fillRect(10, d.y, 280, 55);
+            ctx.strokeRect(10, d.y, 280, 55);
+        }
+        
+        // --- 文字（大幅サイズアップ） ---
+        // 順位
+        ctx.fillStyle = (i < 3) ? PIP_CONFIG.colors.gold : "#94a3b8"; // 上位はゴールド
+        ctx.font = "italic bold 26px sans-serif";
+        ctx.fillText(`${i + 1}`, 25, d.y + 38);
+
+        // 名前
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
+        ctx.font = "bold 18px sans-serif"; // 大きく
+        ctx.fillText(d.name, 65, d.y + 36);
+
+        // 金額
+        ctx.fillStyle = d.isMe ? PIP_CONFIG.colors.textMe : PIP_CONFIG.colors.textMain;
+        ctx.font = "bold 20px monospace"; // 大きく、等幅フォント
+        ctx.textAlign = "right"; // 右寄せ
+        ctx.fillText(`¥${d.amount.toLocaleString()}`, 280, d.y + 36);
+        ctx.textAlign = "left"; // リセット
 
         // キラリ演出
         if (shineEffect.active && shineEffect.index === i) {
             ctx.fillStyle = `rgba(255, 255, 255, ${shineEffect.alpha})`;
-            ctx.fillRect(15, d.y, 270, 50);
+            if (ctx.fillRoundedRect) {
+                ctx.fillRoundedRect(10, d.y, 280, 55, 12);
+            } else {
+                ctx.fillRect(10, d.y, 280, 55);
+            }
             shineEffect.alpha -= 0.05;
             if (shineEffect.alpha <= 0) shineEffect.active = false;
         }
     });
 
-    // 通知メッセージ
+    // 通知メッセージ（大きく、中央下に）
     notifications.forEach((n, i) => {
         ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`;
-        ctx.font = "bold 14px sans-serif";
-        ctx.fillText(n.msg, 20, 380);
+        ctx.font = "bold 18px sans-serif"; // 大きく
+        ctx.textAlign = "center";
+        ctx.fillText(n.msg, 150, 370);
+        ctx.textAlign = "left";
         n.timer--;
-        if (n.timer < 20) n.alpha -= 0.05;
+        if (n.timer < 30) n.alpha -= 0.05;
     });
     notifications = notifications.filter(n => n.alpha > 0);
-
-    // LIVE点滅 (GPS切断防止)
-    if (Math.floor(Date.now() / 500) % 2 === 0) {
-        ctx.fillStyle = "#ef4444";
-        ctx.beginPath(); ctx.arc(270, 35, 5, 0, Math.PI*2); ctx.fill();
-    }
 
     requestAnimationFrame(draw);
 }
 
-// 角丸四角形の補助関数
+// 角丸四角形の補助関数（塗りつぶし）
 CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
     this.beginPath();
     this.moveTo(x+r, y);
@@ -1459,19 +1495,32 @@ CanvasRenderingContext2D.prototype.fillRoundedRect = function(x, y, w, h, r) {
     this.fill();
 };
 
+// 角丸四角形の補助関数（枠線）
+CanvasRenderingContext2D.prototype.strokeRoundedRect = function(x, y, w, h, r) {
+    this.beginPath();
+    this.moveTo(x+r, y);
+    this.arcTo(x+w, y, x+w, y+h, r);
+    this.arcTo(x+w, y+h, x, y+h, r);
+    this.arcTo(x, y+h, x, y, r);
+    this.arcTo(x, y, x+w, y, r);
+    this.closePath();
+    this.stroke();
+};
+
 // --- 4. PiP起動処理 ---
 async function togglePiP() {
     try {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
         } else {
+            // captureStreamの引数（FPS）をCONFIGと同期
             const stream = canvas.captureStream(PIP_CONFIG.fps);
             pipVideo.srcObject = stream;
             await pipVideo.play();
             await pipVideo.requestPictureInPicture();
         }
     } catch (e) {
-        alert("PiPの起動に失敗しました。ブラウザの設定を確認してください。");
+        alert("PiPの起動に失敗しました。このブラウザは対応していない可能性があります。");
     }
 }
 
