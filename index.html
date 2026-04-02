@@ -1598,12 +1598,13 @@ function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; 
 // 1. ページ読み込み時、またはデータ受信時に「裏側」で準備を済ませておく
 function setupPiP() {
     const pipVideo = document.getElementById('pip-video');
-    const stream = canvas.captureStream(30);
+    // ↓ ここを「ranking-canvas」に変更
+    const rCanvas = document.getElementById('ranking-canvas'); 
+    if (!rCanvas) return;
+    
+    const stream = rCanvas.captureStream(30);
     pipVideo.srcObject = stream;
-    // 裏で「再生状態」にしておく（透明なので見えません）
-    pipVideo.play().catch(() => {
-        console.log("自動再生はブロックされましたが、準備はOKです");
-    });
+    pipVideo.play().catch(() => console.log("準備OK"));
 }
 
 // 2. ボタンを押した時は「浮かせる」だけにする
@@ -1626,8 +1627,11 @@ async function togglePiP() {
 // 初期実行
 setupPiP();
 
-// イベントリスナー
-canvas.addEventListener('click', togglePiP);
+// ランキングのキャンバスを取得して、クリックに反応させる
+const rCanvas = document.getElementById('ranking-canvas');
+if (rCanvas) {
+    rCanvas.addEventListener('click', togglePiP);
+}
 
 // ランキング取得（初回と定期実行）
 fetchRankingWithDelay();
