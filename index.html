@@ -1373,7 +1373,7 @@ let currentType = "売上"; // 現在表示中の種類
 let lastSlideTime = Date.now();
 let lastFetchTime = Date.now();
 
-const canvas = document.getElementById('ranking-canvas');
+const rcanvas = document.getElementById('ranking-canvas');
 const ctx = canvas.getContext('2d');
 const pipVideo = document.getElementById('pip-video');
 let notifications = [];
@@ -1597,11 +1597,9 @@ function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; 
 
 // 1. ページ読み込み時、またはデータ受信時に「裏側」で準備を済ませておく
 function setupPiP() {
-    const pipVideo = document.getElementById('pip-video');
-    // ↓ ここを「ranking-canvas」に変更
     const rCanvas = document.getElementById('ranking-canvas'); 
     if (!rCanvas) return;
-    
+
     const stream = rCanvas.captureStream(30);
     pipVideo.srcObject = stream;
     pipVideo.play().catch(() => console.log("準備OK"));
@@ -1610,6 +1608,9 @@ function setupPiP() {
 // 2. ボタンを押した時は「浮かせる」だけにする
 async function togglePiP() {
     const pipVideo = document.getElementById('pip-video');
+    // ↓ ここを「ranking-canvas」という名前に変更
+    const rCanvas = document.getElementById('ranking-canvas'); 
+    
     try {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
@@ -1617,7 +1618,7 @@ async function togglePiP() {
             await pipVideo.requestPictureInPicture();
         }
     } catch (error) {
-        const stream = canvas.captureStream(30);
+        const stream = rCanvas.captureStream(30); // ← ここも修正
         pipVideo.srcObject = stream;
         await pipVideo.play();
         await pipVideo.requestPictureInPicture();
