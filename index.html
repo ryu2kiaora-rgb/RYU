@@ -1596,6 +1596,9 @@ function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }
 function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
 
 // 1. ページ読み込み時、またはデータ受信時に「裏側」で準備を済ませておく
+
+    const canvas = document.getElementById('ranking-canvas');
+    
 function setupPiP() {
     const rCanvas = document.getElementById('ranking-canvas'); 
     if (!rCanvas) return;
