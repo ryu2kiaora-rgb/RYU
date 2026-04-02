@@ -1609,17 +1609,13 @@ function setupPiP() {
 // 2. ボタンを押した時は「浮かせる」だけにする
 async function togglePiP() {
     const pipVideo = document.getElementById('pip-video');
-    
     try {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
         } else {
-            // ★重要：ボタンを押した瞬間に「request」だけを呼ぶ
-            // すでに play() 状態であれば、iPhoneでも即座に浮き上がります
             await pipVideo.requestPictureInPicture();
         }
     } catch (error) {
-        // もし準備が間に合っていなかったら、その場でもう一度セットアップ
         const stream = canvas.captureStream(30);
         pipVideo.srcObject = stream;
         await pipVideo.play();
@@ -1627,14 +1623,24 @@ async function togglePiP() {
     }
 }
 
-// アプリ起動時に実行しておく
+// 初期実行
 setupPiP();
-    
+
+// イベントリスナー
 canvas.addEventListener('click', togglePiP);
+
+// ランキング取得（初回と定期実行）
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-setInterval(renderCanvas, 100); 
+
+// ★重要：setInterval(renderCanvas, 100) は削除して、
+// 代わりに最初の一回だけ呼び出します。
+// 中身で requestAnimationFrame が動いているので、これでずっと描画が続きます。
+renderCanvas(); 
+
 </script>
+</body>
+</html>
     
 </body>
 </html>
