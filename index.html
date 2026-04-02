@@ -315,15 +315,9 @@ window.addEventListener('resize', () => {
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
     </script>
-                                                                          
-   
-  
+    <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 
 
 
@@ -343,24 +337,6 @@ window.addEventListener('resize', () => {
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-
-        // --- ステップ2: FCM初期化 ---
-const messaging = firebase.messaging();
-
-// アプリを開いている時に他の人の動き（通知）を受け取った時の処理
-messaging.onMessage((payload) => {
-    console.log("通知を受信しました:", payload);
-    
-    // 通知データから情報を取得（driverName や body は送信側で設定します）
-    const driverName = payload.data.driverName || "仲間";
-    const messageBody = payload.data.body || "状態が変わりました";
-    
-    // 1. PiP（小窓）に「○○さん、実車になりました」などの文字を出す
-    addNotification(`${driverName}さん: ${messageBody}`);
-    
-    // 2. 地図画面にニコニコ動画風の流れる文字を出す
-    createFlowingComment(`${driverName}: ${messageBody}`);
-});
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
@@ -639,93 +615,101 @@ updateSalesUI()
 
 let driverInterval = null;
 
-// [節約モード] 他者の位置情報はリアルタイム、通知も即時
 async function listenToDrivers() {
-    // すでに監視が始まっていたら何もしない
-    if (driverInterval) return; 
+    if (driverInterval) return;
 
-    const path = getPublicPath('drivers');
-    if (!path) return;
+    const fetchDrivers = async () => {
+        // 【本番用：復活】自分の位置が確定するまで読み込みを開始しない
+        if (currentLat === null || currentLng === null) return;
+        
+        console.log("--- 15分フィルタ実行開始 ---");
+        const path = getPublicPath('drivers');
 
-    console.log("--- リアルタイム監視＆通知システム開始 ---");
+        try {
+            const now = new Date();
+            // 15分前の時刻を計算
+            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-    // .onSnapshot は「待ち受け状態」を作る命令です。一度呼ぶだけでOK！
-    driverInterval = db.collection(path).onSnapshot(snapshot => {
-        const now = Date.now();
-        const fifteenMinutes = 15 * 60 * 1000;
+            // 15分以内に更新があったドライバーだけを取得
+            const snap = await db.collection(path)
+                .where('updatedAt', '>', fifteenMinutesAgo)
+                .get();
 
-        snapshot.docChanges().forEach(change => {
-            const d = change.doc.data();
-            const docId = change.doc.id;
+            let totalOnline = 0;
+            const activeDrivers = {}; 
 
-            // 1. 15分以上前の古いデータは地図から消すか無視する
-            if (!d.updatedAt || (now - d.updatedAt.toMillis() > fifteenMinutes)) {
-                if (otherMarkers[docId]) {
-                    map.removeLayer(otherMarkers[docId]);
-                    delete otherMarkers[docId];
+            snap.forEach(doc => {
+                const d = doc.data();
+                if (d.lat === undefined || d.lng === undefined) return;
+
+                activeDrivers[doc.id] = true;
+                totalOnline++;
+
+                // 自分以外を地図に表示
+                if (user && doc.id === user.uid) return;
+
+                if (map) {
+                    const icon = L.divIcon({
+                        html: createMarkerHtml(d.name, d.status),
+                        className: '',
+                        iconSize: [0, 0]
+                    });
+
+                    if (otherMarkers[doc.id]) {
+                        otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+                    } else {
+                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
+                    }
                 }
-                return;
-            }
-
-            // 2. 自分以外の「状態変化」をみんなの画面に通知する
-            if (user && docId !== user.uid && change.type === "modified") {
-                if (d.status === 'occupied') {
-                    createFlowingComment(`${d.name}さんが実車になりました！`);
-                    addNotification(`${d.name}さん：実車になりました`);
-                } else if (d.status === 'vacant') {
-                    createFlowingComment(`${d.name}さんが目的地に到着しました。`);
-                    addNotification(`${d.name}さん：到着しました`);
-                }
-            }
-
-            // 3. 自分以外を地図に表示・更新
-            if (user && docId === user.uid) return;
-            if (d.lat === undefined || d.lng === undefined) return;
-
-            const icon = L.divIcon({
-                html: createMarkerHtml(d.name, d.status),
-                className: '',
-                iconSize: [0, 0]
             });
 
-            if (otherMarkers[docId]) {
-                otherMarkers[docId].setLatLng([d.lat, d.lng]).setIcon(icon);
-            } else {
-                otherMarkers[docId] = L.marker([d.lat, d.lng], { icon }).addTo(map);
-            }
-        });
+            // 15分以上更新がない人を地図から削除
+            Object.keys(otherMarkers).forEach(id => {
+                if (!activeDrivers[id]) {
+                    if (map && otherMarkers[id]) {
+                        map.removeLayer(otherMarkers[id]);
+                    }
+                    delete otherMarkers[id];
+                }
+            });
 
-        // 4. オンライン人数の更新（地図上に有効なマーカーがある人数＋自分）
-        const countEl = document.getElementById('online-count');
-        if (countEl) {
-            countEl.innerText = Object.keys(otherMarkers).length + 1;
+            // オンライン人数の更新（自分も含む）
+            const countEl = document.getElementById('online-count');
+            if (countEl) countEl.innerText = totalOnline;
+
+        } catch (e) {
+            console.error("driver read error", e);
+        }
+    };
+
+    // 初回実行を5秒後、その後1.5分おき
+    setTimeout(fetchDrivers, 5000);
+    driverInterval = setInterval(fetchDrivers, 90000);
+}
+
+        function updateSalesUI() {
+            const now = new Date();
+            const range = getPeriodRange(now, closingDay);
+            const startStr = formatDate(range.start), endStr = formatDate(range.end);
+
+            // --- ここを追加 ---
+            // 表示用に「月/日」の形式に変換して反映
+            const displayStart = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
+            const displayEnd = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
+            document.getElementById('period-range-text').innerText = `${displayStart} 〜 ${displayEnd}`;
+            // ------------------
+            
+            const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
+            document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
+            document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+            document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).length}回完了`;
+            renderCalendar();
+            showDailyDetail(selectedDateStr);
+            // 本日の売上が変わったので、他者へ通知するために1回送信
+            syncStatusToFirestore(true);
         }
 
-    }, e => console.error("driver monitor error", e));
-} // ← ★ここが足りなかった「listenToDrivers」を閉じるカッコです！
-
-function updateSalesUI() {
-    const now = new Date();
-    const range = getPeriodRange(now, closingDay);
-    const startStr = formatDate(range.start), endStr = formatDate(range.end);
-
-    // 表示用に「月/日」の形式に変換して反映
-    const displayStart = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
-    const displayEnd = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
-    const periodEl = document.getElementById('period-range-text');
-    if (periodEl) periodEl.innerText = `${displayStart} 〜 ${displayEnd}`;
-    
-    const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
-    document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-    document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
-    document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-    document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).length}回完了`;
-    
-    renderCalendar();
-    showDailyDetail(selectedDateStr);
-    // 本日の売上が変わったので、他者へ通知するために1回送信
-    syncStatusToFirestore(true);
-}
         // Logic for Editing
         function openEditLog(id) {
             const log = salesLogs.find(l => l.id === id);
@@ -832,38 +816,21 @@ logId:editingLogId
         };
 
         document.getElementById('btn-ride-on').onclick = () => {
-    isDriving = true; 
-    rideStartTimestamp = Date.now();
-    localStorage.setItem("rideStart", rideStartTimestamp);
-    startPos = { lat: currentLat, lng: currentLng };
-    
-    document.getElementById('active-timer-container').classList.remove('invisible');
-    document.getElementById('btn-ride-on').classList.add('hidden');
-    document.getElementById('btn-ride-off').classList.remove('hidden');
-    
-    if (userMarker) {
-        userMarker.setIcon(L.divIcon({ 
-            html: createMarkerHtml(userName, 'occupied'), 
-            className: '', 
-            iconSize:[0,0] 
-        }));
-    }
-    
-    syncStatusToFirestore(true); // 状態変化時は即送信
-
-    timerInterval = setInterval(() => {
-        const sec = Math.floor((Date.now() - rideStartTimestamp)/1000);
-        document.getElementById('timer-display').innerText = `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;
-    }, 1000);
-
-    // ★演出の追加
-    addNotification("ステータスを【実車】に変更しました");
-    createFlowingComment("実車になりました！安全運転で！");
-    
-    // ★同期の開始
-    startSyncInterval(); 
-}; // ←ここでしっかり閉じます
-        
+            isDriving = true; rideStartTimestamp = Date.now();
+            localStorage.setItem("rideStart", rideStartTimestamp);
+            startPos = { lat: currentLat, lng: currentLng };
+            document.getElementById('active-timer-container').classList.remove('invisible');
+            document.getElementById('btn-ride-on').classList.add('hidden');
+            document.getElementById('btn-ride-off').classList.remove('hidden');
+            if (userMarker) userMarker.setIcon(L.divIcon({ html: createMarkerHtml(userName, 'occupied'), className: '', iconSize:[0,0] }));
+            syncStatusToFirestore(true); // 状態変化時は即送信
+            timerInterval = setInterval(() => {
+                const sec = Math.floor((Date.now() - rideStartTimestamp)/1000);
+                document.getElementById('timer-display').innerText = `${Math.floor(sec/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;
+            }, 1000);
+                // ★ここに追加！！
+    startSyncInterval();
+        };
 
         document.getElementById('btn-ride-off').onclick = () => {
             isDriving = false; clearInterval(timerInterval);
@@ -879,49 +846,30 @@ logId:editingLogId
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
-    const amount = parseInt(currentInputAmount) || 0;
-    if (amount <= 0) return;
-
-    const now = new Date();
-    const data = { 
-        amount, 
-        dateStr: getBusinessDate(now), 
-        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-        pickupTime: Number(localStorage.getItem("rideStart")),
-        dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-        userName: userName,
-        lat: startPos?.lat || currentLat, 
-        lng: startPos?.lng || currentLng,
-        startLat: startPos?.lat || currentLat, 
-        startLng: startPos?.lng || currentLng,
-        endLat: endPos?.lat || currentLat, 
-        endLng: endPos?.lng || currentLng
-    };
-
-    const path = getPrivatePath('sales');
-    if (path) {
-        // Firestoreに保存
-        const docRef = await db.collection(path).add(data);
-        
-        // GASに送信
-        sendToGAS(data, docRef.id);
-        
-        // データのクリア
-        localStorage.removeItem("rideStart");
-        rideStartTimestamp = null;
-
-        // ★演出を追加（ここに入れるのが正解！）
-        addNotification("目的地に到着！売上を送信しました");
-        createFlowingComment("目的地に到着！お疲れ様でした！");
-
-        // refreshRanking(); // 必要ならランキング再取得を有効に
-    }
-
-    // モーダルを閉じて入力をリセット（ここが if の外にあるのがポイント）
-    document.getElementById('modal-payment').classList.add('hidden');
-    currentInputAmount = ""; 
-    document.getElementById('input-display').innerText = "¥ 0";
-};
+            const amount = parseInt(currentInputAmount) || 0;
+            if (amount <= 0) return;
+            const now = new Date();
+            const data = { 
+                amount, dateStr: getBusinessDate(now), 
+                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+                pickupTime: Number(localStorage.getItem("rideStart")),
+                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+                userName: userName,
+                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
+                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
+                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
+            };
+            const path = getPrivatePath('sales');
+            if (path) {
+                const docRef = await db.collection(path).add(data);
+                sendToGAS(data,docRef.id)
+                localStorage.removeItem("rideStart");
+rideStartTimestamp = null;
+                //refreshRanking(); // 売上が増えたのでランキングを再取得
+            }
+            document.getElementById('modal-payment').classList.add('hidden');
+            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
+        };
 
         // Utility UI Helpers
 
@@ -1356,7 +1304,9 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 
 };
         
+    </script>
 
+<script>
 // --- 設定拡張 ---
 const PIP_CONFIG = {
     updateInterval: 3 * 60 * 1000,
@@ -1373,7 +1323,7 @@ let currentType = "売上"; // 現在表示中の種類
 let lastSlideTime = Date.now();
 let lastFetchTime = Date.now();
 
-const rcanvas = document.getElementById('ranking-canvas');
+const canvas = document.getElementById('ranking-canvas');
 const ctx = canvas.getContext('2d');
 const pipVideo = document.getElementById('pip-video');
 let notifications = [];
@@ -1533,123 +1483,58 @@ function renderCanvas() {
     ctx.fillText(isPiP ? "タップしてアプリに戻る" : "タップして小窓(PiP)で表示", 150, 385);
     ctx.textAlign = "left";
 
-// --- ステップ4: PiP通知の見た目アップグレード ---
-    notifications.forEach((n, index) => {
-        // 通知が複数重なってもいいように、表示位置を少しずつずらす
-        const yPos = 180 + (index * 40); 
-        
-        // 文字の背景に黒い帯を入れて読みやすくする
-        ctx.fillStyle = `rgba(0, 0, 0, ${n.alpha * 0.7})`;
-        // 左から右まで突き抜ける帯、または中央のボックス
-        ctx.fillRect(20, yPos - 25, 260, 40); 
-        
-        // 通知メッセージ本体
-        ctx.fillStyle = `rgba(255, 255, 255, ${n.alpha})`;
-        ctx.font = "bold 16px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText(n.msg, 150, yPos + 2);
-        ctx.textAlign = "left"; // 元に戻しておく
-
-        n.timer--;
-        if (n.timer < 30) n.alpha -= 0.1;
+    // 通知
+    notifications.forEach(n => {
+        ctx.fillStyle = `rgba(239, 68, 68, ${n.alpha})`; ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center"; ctx.fillText(n.msg, 150, 360); ctx.textAlign = "left";
+        n.timer--; if (n.timer < 30) n.alpha -= 0.1;
     });
-    // --- ステップ3: ニコニコ動画風に文字を流す関数 ---
-function createFlowingComment(text) {
-    // 地図が表示されている「ホームタブ」の要素を取得
-    const container = document.getElementById('tab-home'); 
-    if (!container) return;
-
-    const comment = document.createElement('div');
-    
-    // 表示する文字を設定
-    comment.innerText = text;
-    
-    // 文字の見た目を設定（背景が地図でも見えやすいように白文字＋黒縁取り）
-    comment.style.position = 'absolute';
-    comment.style.right = '-100%'; // 最初は右側の画面外に隠しておく
-    comment.style.top = `${Math.random() * 60 + 10}%`; // 上から10%〜70%の高さにランダムで表示
-    comment.style.whiteSpace = 'nowrap';
-    comment.style.fontSize = '28px'; // 少し大きめで目立たせる
-    comment.style.fontWeight = 'bold';
-    comment.style.color = 'white';
-    comment.style.textShadow = '2px 2px 4px rgba(0,0,0,1), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000';
-    comment.style.zIndex = '2000'; // 一番手前に表示
-    comment.style.pointerEvents = 'none'; // クリックの邪魔にならないようにする
-    comment.style.transition = 'transform 8s linear'; // 8秒かけて一定速度で流れる設定
-
-    container.appendChild(comment);
-
-    // 画面に表示された直後に、左側へ移動を開始させる
-    requestAnimationFrame(() => {
-        // 自分の横幅分＋画面の横幅分だけ左にスライドさせる
-        const moveDistance = window.innerWidth + comment.offsetWidth + 200;
-        comment.style.transform = `translateX(-${moveDistance}px)`;
-    });
-
-    // 流れ終わった頃（8.5秒後）に、メモリ節約のため要素を消す
-    setTimeout(() => {
-        comment.remove();
-    }, 8500);
+    notifications = notifications.filter(n => n.alpha > 0);
 }
 
 function addNotification(msg) { notifications.push({ msg, timer: 120, alpha: 1 }); }
 function triggerShine(index) { shineEffect = { active: true, index, alpha: 1 }; }
 
 // 1. ページ読み込み時、またはデータ受信時に「裏側」で準備を済ませておく
-
-    const canvas = document.getElementById('ranking-canvas');
-    
 function setupPiP() {
-    const rCanvas = document.getElementById('ranking-canvas'); 
-    if (!rCanvas) return;
-
-    const stream = rCanvas.captureStream(30);
+    const pipVideo = document.getElementById('pip-video');
+    const stream = canvas.captureStream(30);
     pipVideo.srcObject = stream;
-    pipVideo.play().catch(() => console.log("準備OK"));
+    // 裏で「再生状態」にしておく（透明なので見えません）
+    pipVideo.play().catch(() => {
+        console.log("自動再生はブロックされましたが、準備はOKです");
+    });
 }
 
 // 2. ボタンを押した時は「浮かせる」だけにする
 async function togglePiP() {
     const pipVideo = document.getElementById('pip-video');
-    // ↓ ここを「ranking-canvas」という名前に変更
-    const rCanvas = document.getElementById('ranking-canvas'); 
     
     try {
         if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
         } else {
+            // ★重要：ボタンを押した瞬間に「request」だけを呼ぶ
+            // すでに play() 状態であれば、iPhoneでも即座に浮き上がります
             await pipVideo.requestPictureInPicture();
         }
     } catch (error) {
-        const stream = rCanvas.captureStream(30); // ← ここも修正
+        // もし準備が間に合っていなかったら、その場でもう一度セットアップ
+        const stream = canvas.captureStream(30);
         pipVideo.srcObject = stream;
         await pipVideo.play();
         await pipVideo.requestPictureInPicture();
     }
 }
 
-// 初期実行
+// アプリ起動時に実行しておく
 setupPiP();
-
-// ランキングのキャンバスを取得して、クリックに反応させる
-const rCanvas = document.getElementById('ranking-canvas');
-if (rCanvas) {
-    rCanvas.addEventListener('click', togglePiP);
-}
-
-// ランキング取得（初回と定期実行）
+    
+canvas.addEventListener('click', togglePiP);
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-
-// ★重要：setInterval(renderCanvas, 100) は削除して、
-// 代わりに最初の一回だけ呼び出します。
-// 中身で requestAnimationFrame が動いているので、これでずっと描画が続きます。
-renderCanvas(); 
-
-
-} // ← さらにもう 1 つ書き足す
+setInterval(renderCanvas, 100); 
 </script>
+    
 </body>
 </html>
-    
-
