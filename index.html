@@ -52,6 +52,40 @@
         .pip-hint {
             font-size: 8px; color: #94a3b8; text-align: center; margin-top: 4px;
         }
+
+
+/* 吹き出し演出用スタイル */
+.driver-bubble {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 6px 12px;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    font-size: 11px;
+    font-weight: bold;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    border: 2px solid #3b82f6;
+    animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.driver-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 8px 8px 0;
+    border-style: solid;
+    border-color: white transparent transparent;
+}
+@keyframes bounceIn {
+    0% { transform: translateX(-50%) scale(0); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
         
     </style>
 </head>
@@ -318,7 +352,7 @@ window.addEventListener('resize', () => {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
     </script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
 
     <script>
@@ -1233,6 +1267,101 @@ loadPrediction()
     blur: 15
   }).addTo(map);
 }
+
+        // ==========================================
+// ライドシェコネクト演出拡張：FCM連携 & 地図演出
+// ==========================================
+
+// 1. 通知受信用リスナー（Firestoreを介して他者の動きを検知）
+function listenToEvents() {
+    const eventPath = getPublicPath('events'); // イベント用コレクション
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    db.collection(eventPath)
+        .where('timestamp', '>', fiveMinutesAgo)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === "added") {
+                    const data = change.doc.data();
+                    if (data.uid === user.uid) return; // 自分のは無視
+                    showMapPerformance(data);
+                }
+            });
+        });
+}
+
+// 2. 地図上での演出実行
+function showMapPerformance(data) {
+    const marker = otherMarkers[data.uid];
+    if (!marker) return;
+
+    // 吹き出しを表示
+    const bubble = document.createElement('div');
+    bubble.className = 'driver-bubble';
+    bubble.innerText = data.message;
+    marker.getElement().appendChild(bubble);
+
+    // 5秒後に消去
+    setTimeout(() => { if(bubble) bubble.remove(); }, 5000);
+
+    // 高額キラキラ演出（3000円以上）
+    if (data.amount >= 3000) {
+        confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#FFD700', '#FFA500', '#FF4500']
+        });
+    }
+}
+
+// 3. イベントを送信する共通関数
+async function broadcastEvent(type, amount = 0) {
+    const startMsgs = [
+        `${userName}さんが実車になりました！どこへ向かうのでしょうか？`,
+        `お、${userName}さんがお客様を乗せました！`,
+        `${userName}さんが実車中。ロングの予感…！？`
+    ];
+    const endMsgs = [
+        `${userName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
+        `${userName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
+        `お疲れ様！${userName}さんが ¥${amount.toLocaleString()} を獲得しました！`
+    ];
+
+    const msg = type === 'start' 
+        ? startMsgs[Math.floor(Math.random() * startMsgs.length)]
+        : endMsgs[Math.floor(Math.random() * endMsgs.length)];
+
+    await db.collection(getPublicPath('events')).add({
+        uid: user.uid,
+        userName: userName,
+        type: type,
+        message: msg,
+        amount: amount,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+// 4. 既存のボタン処理に割り込み（フック）
+const originalRideOn = document.getElementById('btn-ride-on').onclick;
+document.getElementById('btn-ride-on').onclick = function(e) {
+    if(originalRideOn) originalRideOn.apply(this, arguments);
+    broadcastEvent('start');
+};
+
+const originalPaySubmit = document.getElementById('btn-pay-submit').onclick;
+document.getElementById('btn-pay-submit').onclick = function(e) {
+    // 既存の処理を実行
+    if(originalPaySubmit) originalPaySubmit.apply(this, arguments);
+    
+    // 金額を取得して放送（既存変数の currentInputAmount を利用）
+    const amount = parseInt(currentInputAmount) || 0;
+    if(amount > 0) broadcastEvent('end', amount);
+};
+
+// 5. 起動時にイベント監視を開始
+// initAppの中、またはその付近に追加
+setTimeout(listenToEvents, 5000);
         
         window.onload = initApp;
 
@@ -1535,6 +1664,8 @@ fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 setInterval(renderCanvas, 100); 
 </script>
-    
+
+
+
 </body>
 </html>
