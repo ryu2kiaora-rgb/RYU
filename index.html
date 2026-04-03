@@ -467,9 +467,9 @@ function initMap() {
 
     // グレーマップ
     grayLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd',
-    maxZoom: 20
-});
+        subdomains: 'abcd',
+        maxZoom: 20
+    });
 
     // 最初はカラー
     normalLayer.addTo(map);
@@ -725,9 +725,9 @@ async function listenToDrivers() {
         }
     };
 
-    // 初回実行を5秒後、その後1.5分おき
+    // 初回実行を5秒後、その後30秒おき
     setTimeout(fetchDrivers, 5000);
-    driverInterval = setInterval(fetchDrivers, 90000);
+    driverInterval = setInterval(fetchDrivers, 30000);
 }
 
         function updateSalesUI() {
