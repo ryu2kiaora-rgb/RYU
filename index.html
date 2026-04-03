@@ -463,13 +463,13 @@ function initMap() {
     .setView([35.6895, 139.6917], 14);
 
     // 通常カラー地図
-const normalLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    normalLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
 
-// グレーマップ
-const grayLayer = L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png');
+    // グレーマップ
+    grayLayer = L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png');
 
-// 最初は通常地図
-normalLayer.addTo(map);
+    // 最初はカラー
+    normalLayer.addTo(map);
 
 
     editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
