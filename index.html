@@ -439,21 +439,37 @@ function sendToGAS(data, logId){
         const getPrivatePath = (col) => user ? `artifacts/${appId}/users/${user.uid}/${col}` : null;
 
 async function initApp() {
+
+    // ★ UID復元チェック（iPhoneリセット対策）
+    const savedUID = localStorage.getItem("rideconnect_uid");
+    if (savedUID) {
+        console.log("保存UID:", savedUID);
+    }
+
     auth.onAuthStateChanged(async (u) => {
         if (u) {
             user = u;
+
+            // ★ UID保存
+            localStorage.setItem("rideconnect_uid", u.uid);
+
             initMap();
             initNumpad();
             listenToSales();
             listenToDrivers();
+
             document.getElementById('auth-loading-ui').classList.add('hidden');
+
             if (userName) {
                 updateNameDisplay();
                 document.getElementById('start-shift-ui').classList.remove('hidden');
             } else {
                 document.getElementById('registration-ui').classList.remove('hidden');
             }
-        } else { await auth.signInAnonymously(); }
+
+        } else {
+            await auth.signInAnonymously();
+        }
     });
 }
 
