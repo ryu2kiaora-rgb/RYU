@@ -678,91 +678,81 @@ updateSalesUI()
 
 let driverInterval = null;
 
+// 1. fetchDriversを外に定義（これでiPhone対策コードからも呼べるようになります）
+async function fetchDrivers() {
+    if (currentLat === null || currentLng === null) return;
+
+    const path = getPublicPath('drivers');
+
+    try {
+        const now = new Date();
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
+
+        const snap = await db.collection(path)
+            .where('updatedAt', '>', fifteenMinutesAgo)
+            .get();
+
+        let totalOnline = 0;
+        const activeDrivers = {};
+
+        snap.forEach(doc => {
+            const d = doc.data();
+            if (d.lat === undefined || d.lng === undefined) return;
+
+            activeDrivers[doc.id] = true;
+            totalOnline++;
+
+            if (user && doc.id === user.uid) return;
+
+            if (map) {
+                const icon = L.divIcon({
+                    html: createMarkerHtml(d.name, d.status),
+                    className: '',
+                    iconSize: [0, 0]
+                });
+
+                const newPos = [d.lat, d.lng];
+
+                if (otherMarkers[doc.id]) {
+                    const marker = otherMarkers[doc.id];
+                    const prev = lastPositions[doc.id] || newPos;
+
+                    marker.setIcon(icon);
+                    animateMarker(marker, prev, newPos, 30000);
+                } else {
+                    const marker = L.marker(newPos, { icon }).addTo(map);
+                    otherMarkers[doc.id] = marker;
+                }
+
+                lastPositions[doc.id] = newPos;
+            }
+        });
+
+        Object.keys(otherMarkers).forEach(id => {
+            if (!activeDrivers[id]) {
+                if (map && otherMarkers[id]) {
+                    map.removeLayer(otherMarkers[id]);
+                }
+                delete otherMarkers[id];
+                delete lastPositions[id];
+            }
+        });
+
+        const countEl = document.getElementById('online-count');
+        if (countEl) countEl.innerText = totalOnline;
+
+    } catch (e) {
+        console.error("driver read error", e);
+    }
+}
+
+// 2. listenToDriversは定期実行のスケジュール管理だけを行う
 async function listenToDrivers() {
     if (driverInterval) return;
 
-    const fetchDrivers = async () => {
-
-        if (currentLat === null || currentLng === null) return;
-
-        const path = getPublicPath('drivers');
-
-        try {
-
-            const now = new Date();
-            const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
-
-            const snap = await db.collection(path)
-                .where('updatedAt', '>', fifteenMinutesAgo)
-                .get();
-
-            let totalOnline = 0;
-            const activeDrivers = {};
-
-            snap.forEach(doc => {
-
-                const d = doc.data();
-                if (d.lat === undefined || d.lng === undefined) return;
-
-                activeDrivers[doc.id] = true;
-                totalOnline++;
-
-                if (user && doc.id === user.uid) return;
-
-                if (map) {
-
-                    const icon = L.divIcon({
-                        html: createMarkerHtml(d.name, d.status),
-                        className: '',
-                        iconSize: [0, 0]
-                    });
-
-                    const newPos = [d.lat, d.lng];
-
-                    if (otherMarkers[doc.id]) {
-
-                        const marker = otherMarkers[doc.id];
-                        const prev = lastPositions[doc.id] || newPos;
-
-                        marker.setIcon(icon);
-
-                        animateMarker(marker, prev, newPos, 30000);
-
-                    } else {
-
-                        const marker = L.marker(newPos, { icon }).addTo(map);
-                        otherMarkers[doc.id] = marker;
-
-                    }
-
-                    lastPositions[doc.id] = newPos;
-                }
-
-            });
-
-            Object.keys(otherMarkers).forEach(id => {
-
-                if (!activeDrivers[id]) {
-
-                    if (map && otherMarkers[id]) {
-                        map.removeLayer(otherMarkers[id]);
-                    }
-
-                    delete otherMarkers[id];
-                    delete lastPositions[id];
-                }
-
-            });
-
-            const countEl = document.getElementById('online-count');
-            if (countEl) countEl.innerText = totalOnline;
-
-        } catch (e) {
-            console.error("driver read error", e);
-        }
-    };
-
+    // 初回実行（5秒後）
     setTimeout(fetchDrivers, 5000);
+    // 30秒ごとの定期実行
     driverInterval = setInterval(fetchDrivers, 30000);
 }
 
