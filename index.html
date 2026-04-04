@@ -626,6 +626,9 @@ document.addEventListener("visibilitychange", () => {
 
             syncStatusToFirestore(true);
 
+            // 他ドライバー更新
+            fetchDrivers();
+
         });
 
     }
