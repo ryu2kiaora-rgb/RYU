@@ -984,30 +984,52 @@ logId:editingLogId
         };
 
         document.getElementById('btn-pay-submit').onclick = async () => {
-            const amount = parseInt(currentInputAmount) || 0;
-            if (amount <= 0) return;
-            const now = new Date();
-            const data = { 
-                amount, dateStr: getBusinessDate(now), 
-                timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
-                pickupTime: Number(localStorage.getItem("rideStart")),
-                dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
-                userName: userName,
-                lat: startPos?.lat || currentLat, lng: startPos?.lng || currentLng,
-                startLat: startPos?.lat || currentLat, startLng: startPos?.lng || currentLng,
-                endLat: endPos?.lat || currentLat, endLng: endPos?.lng || currentLng
-            };
-            const path = getPrivatePath('sales');
-            if (path) {
-                const docRef = await db.collection(path).add(data);
-                sendToGAS(data,docRef.id)
-                localStorage.removeItem("rideStart");
-rideStartTimestamp = null;
-                //refreshRanking(); // 売上が増えたのでランキングを再取得
-            }
-            document.getElementById('modal-payment').classList.add('hidden');
-            currentInputAmount = ""; document.getElementById('input-display').innerText = "¥ 0";
-        };
+    const amount = parseInt(currentInputAmount) || 0;
+    if (amount <= 0) return;
+
+    const now = new Date();
+    const data = { 
+        amount, 
+        dateStr: getBusinessDate(now), 
+        timeStr: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 
+        pickupTime: Number(localStorage.getItem("rideStart")),
+        dropoffTime: firebase.firestore.FieldValue.serverTimestamp(),
+        userName: userName,
+        lat: startPos?.lat || currentLat, 
+        lng: startPos?.lng || currentLng,
+        startLat: startPos?.lat || currentLat, 
+        startLng: startPos?.lng || currentLng,
+        endLat: endPos?.lat || currentLat, 
+        endLng: endPos?.lng || currentLng
+    };
+
+    const path = getPrivatePath('sales');
+    if (path) {
+        try {
+            const docRef = await db.collection(path).add(data);
+            
+            // データ保存成功時に紙吹雪を実行
+            triggerConfetti();
+            
+            // Google Apps Scriptへの送信
+            sendToGAS(data, docRef.id);
+            
+            // 状態のクリア
+            localStorage.removeItem("rideStart");
+            rideStartTimestamp = null;
+            
+            // refreshRanking(); // ランキング更新が必要な場合はコメントアウトを外す
+        } catch (error) {
+            console.error("Error adding document: ", error);
+            alert("データの保存に失敗しました。");
+        }
+    }
+
+    // UIの初期化
+    document.getElementById('modal-payment').classList.add('hidden');
+    currentInputAmount = ""; 
+    document.getElementById('input-display').innerText = "¥ 0";
+};
 
         // Utility UI Helpers
 
@@ -1300,6 +1322,17 @@ document.getElementById('btn-recenter').onclick = async () => {
     }
 
 };
+
+        // 紙吹雪を飛ばす関数
+function triggerConfetti() {
+    confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        zIndex: 9999 // モーダルの上でも表示されるように設定
+    });
+}
+        
         // -----------------------
 
         // ===== ここに追加 =====
