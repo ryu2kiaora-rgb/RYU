@@ -52,6 +52,40 @@
         .pip-hint {
             font-size: 8px; color: #94a3b8; text-align: center; margin-top: 4px;
         }
+
+
+/* 吹き出し演出用スタイル */
+.driver-bubble {
+    position: absolute;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 6px 12px;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    font-size: 11px;
+    font-weight: bold;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    border: 2px solid #3b82f6;
+    animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.driver-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 8px 8px 0;
+    border-style: solid;
+    border-color: white transparent transparent;
+}
+@keyframes bounceIn {
+    0% { transform: translateX(-50%) scale(0); opacity: 0; }
+    100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
         
     </style>
 </head>
@@ -318,7 +352,7 @@ window.addEventListener('resize', () => {
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
     </script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
 
     <script>
@@ -347,6 +381,7 @@ window.addEventListener('resize', () => {
         let currentLat = null, currentLng = null, editingLogId = null;
         let editStartMarker, editEndMarker;
         let driverStatus = "on";
+        let lastPositions = {};
 
         // ===== 位置移動距離計算（節約モード用） =====
 function calcDistance(lat1, lon1, lat2, lon2) {
@@ -428,8 +463,17 @@ function initMap() {
     map = L.map('map', { zoomControl: false, attributionControl: false })
     .setView([35.6895, 139.6917], 14);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-    .addTo(map);
+    // 通常カラー地図
+    normalLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+
+    // グレーマップ
+    grayLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        subdomains: 'abcd',
+        maxZoom: 20
+    });
+
+    // 最初はカラー
+    normalLayer.addTo(map);
 
 
     editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
@@ -619,61 +663,78 @@ async function listenToDrivers() {
     if (driverInterval) return;
 
     const fetchDrivers = async () => {
-        // 【本番用：復活】自分の位置が確定するまで読み込みを開始しない
+
         if (currentLat === null || currentLng === null) return;
-        
-        console.log("--- 15分フィルタ実行開始 ---");
+
         const path = getPublicPath('drivers');
 
         try {
+
             const now = new Date();
-            // 15分前の時刻を計算
             const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-            // 15分以内に更新があったドライバーだけを取得
             const snap = await db.collection(path)
                 .where('updatedAt', '>', fifteenMinutesAgo)
                 .get();
 
             let totalOnline = 0;
-            const activeDrivers = {}; 
+            const activeDrivers = {};
 
             snap.forEach(doc => {
+
                 const d = doc.data();
                 if (d.lat === undefined || d.lng === undefined) return;
 
                 activeDrivers[doc.id] = true;
                 totalOnline++;
 
-                // 自分以外を地図に表示
                 if (user && doc.id === user.uid) return;
 
                 if (map) {
+
                     const icon = L.divIcon({
                         html: createMarkerHtml(d.name, d.status),
                         className: '',
                         iconSize: [0, 0]
                     });
 
+                    const newPos = [d.lat, d.lng];
+
                     if (otherMarkers[doc.id]) {
-                        otherMarkers[doc.id].setLatLng([d.lat, d.lng]).setIcon(icon);
+
+                        const marker = otherMarkers[doc.id];
+                        const prev = lastPositions[doc.id] || newPos;
+
+                        marker.setIcon(icon);
+
+                        animateMarker(marker, prev, newPos, 30000);
+
                     } else {
-                        otherMarkers[doc.id] = L.marker([d.lat, d.lng], { icon }).addTo(map);
+
+                        const marker = L.marker(newPos, { icon }).addTo(map);
+                        otherMarkers[doc.id] = marker;
+
                     }
+
+                    lastPositions[doc.id] = newPos;
                 }
+
             });
 
-            // 15分以上更新がない人を地図から削除
             Object.keys(otherMarkers).forEach(id => {
+
                 if (!activeDrivers[id]) {
+
                     if (map && otherMarkers[id]) {
                         map.removeLayer(otherMarkers[id]);
                     }
+
                     delete otherMarkers[id];
+                    delete lastPositions[id];
                 }
+
             });
 
-            // オンライン人数の更新（自分も含む）
             const countEl = document.getElementById('online-count');
             if (countEl) countEl.innerText = totalOnline;
 
@@ -682,33 +743,91 @@ async function listenToDrivers() {
         }
     };
 
-    // 初回実行を5秒後、その後1.5分おき
     setTimeout(fetchDrivers, 5000);
-    driverInterval = setInterval(fetchDrivers, 90000);
+    driverInterval = setInterval(fetchDrivers, 30000);
+}
+
+        function animateMarker(marker, start, end, duration = 30000) {
+
+    const startTime = Date.now();
+
+    const angle = getBearing(start, end);
+
+    if (marker._icon) {
+        marker._icon.style.transformOrigin = "center";
+        marker._icon.style.transform = `rotate(${angle}deg)`;
+    }
+
+    function animate() {
+
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        const lat = start[0] + (end[0] - start[0]) * progress;
+        const lng = start[1] + (end[1] - start[1]) * progress;
+
+        marker.setLatLng([lat, lng]);
+
+        if (progress < 1) requestAnimationFrame(animate);
+    }
+
+    animate();
+}
+
+function getBearing(start, end) {
+
+    const lat1 = start[0] * Math.PI / 180;
+    const lat2 = end[0] * Math.PI / 180;
+    const dLng = (end[1] - start[1]) * Math.PI / 180;
+
+    const y = Math.sin(dLng) * Math.cos(lat2);
+    const x =
+        Math.cos(lat1) * Math.sin(lat2) -
+        Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+
+    let brng = Math.atan2(y, x) * 180 / Math.PI;
+
+    return (brng + 360) % 360;
 }
 
         function updateSalesUI() {
-            const now = new Date();
-            const range = getPeriodRange(now, closingDay);
-            const startStr = formatDate(range.start), endStr = formatDate(range.end);
+    const now = new Date();
+    const range = getPeriodRange(now, closingDay);
+    const startStr = formatDate(range.start), endStr = formatDate(range.end);
 
-            // --- ここを追加 ---
-            // 表示用に「月/日」の形式に変換して反映
-            const displayStart = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
-            const displayEnd = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
-            document.getElementById('period-range-text').innerText = `${displayStart} 〜 ${displayEnd}`;
-            // ------------------
-            
-            const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
-            document.getElementById('month-total-sales').innerText = `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-            document.getElementById('month-total-count').innerText = `${periodLogs.length}件`;
-            document.getElementById('today-sales').innerText = `¥${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
-            document.getElementById('today-count').innerText = `${salesLogs.filter(l => l.dateStr === getBusinessDate(now)).length}回完了`;
-            renderCalendar();
-            showDailyDetail(selectedDateStr);
-            // 本日の売上が変わったので、他者へ通知するために1回送信
-            syncStatusToFirestore(true);
-        }
+    const displayStart = `${range.start.getMonth() + 1}/${range.start.getDate()}`;
+    const displayEnd = `${range.end.getMonth() + 1}/${range.end.getDate()}`;
+    document.getElementById('period-range-text').innerText = `${displayStart} 〜 ${displayEnd}`;
+
+    const periodLogs = salesLogs.filter(l => l.dateStr >= startStr && l.dateStr <= endStr);
+
+    document.getElementById('month-total-sales').innerText =
+        `¥${periodLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+
+    document.getElementById('month-total-count').innerText =
+        `${periodLogs.length}件`;
+
+    // 🔧 今日の営業日
+    const todayBusiness = getBusinessDate(now);
+
+    // 🔧 pickupTimeから営業日計算
+    const todayLogs = salesLogs.filter(l => {
+        if (!l.pickupTime) return false;
+        const d = new Date(l.pickupTime);
+        return getBusinessDate(d) === todayBusiness;
+    });
+
+    document.getElementById('today-sales').innerText =
+        `¥${todayLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
+
+    document.getElementById('today-count').innerText =
+        `${todayLogs.length}回完了`;
+
+    renderCalendar();
+    showDailyDetail(selectedDateStr);
+
+    syncStatusToFirestore(true);
+}
 
         // Logic for Editing
         function openEditLog(id) {
@@ -876,6 +995,9 @@ rideStartTimestamp = null;
 
         let heatLayer=null
 let heatEnabled=false
+
+let normalLayer
+let grayLayer
 
 async function loadPrediction(){
 
@@ -1175,7 +1297,7 @@ heatBtn.style.bottom="80px"
 heatBtn.style.zIndex="1200"
 
 document.body.appendChild(heatBtn)
-
+        
 heatBtn.onclick=()=>{
 
 heatEnabled=!heatEnabled
@@ -1185,13 +1307,20 @@ if(heatEnabled){
 heatBtn.innerText="需要ON 🔥"
 heatBtn.classList.add("bg-red-500","text-white")
 
+// 地図をグレーに
+map.removeLayer(normalLayer)
+grayLayer.addTo(map)
+
 loadPrediction()
 
 }else{
 
 heatBtn.innerText="需要OFF"
-
 heatBtn.classList.remove("bg-red-500","text-white")
+
+// 地図をカラーに戻す
+map.removeLayer(grayLayer)
+normalLayer.addTo(map)
 
 if(heatLayer) map.removeLayer(heatLayer)
 
@@ -1233,6 +1362,101 @@ loadPrediction()
     blur: 15
   }).addTo(map);
 }
+
+        // ==========================================
+// ライドシェコネクト演出拡張：FCM連携 & 地図演出
+// ==========================================
+
+// 1. 通知受信用リスナー（Firestoreを介して他者の動きを検知）
+function listenToEvents() {
+    const eventPath = getPublicPath('events'); // イベント用コレクション
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+
+    db.collection(eventPath)
+        .where('timestamp', '>', fiveMinutesAgo)
+        .onSnapshot(snap => {
+            snap.docChanges().forEach(change => {
+                if (change.type === "added") {
+                    const data = change.doc.data();
+                    if (data.uid === user.uid) return; // 自分のは無視
+                    showMapPerformance(data);
+                }
+            });
+        });
+}
+
+// 2. 地図上での演出実行
+function showMapPerformance(data) {
+    const marker = otherMarkers[data.uid];
+    if (!marker) return;
+
+    // 吹き出しを表示
+    const bubble = document.createElement('div');
+    bubble.className = 'driver-bubble';
+    bubble.innerText = data.message;
+    marker.getElement().appendChild(bubble);
+
+    // 5秒後に消去
+    setTimeout(() => { if(bubble) bubble.remove(); }, 5000);
+
+    // 高額キラキラ演出（3000円以上）
+    if (data.amount >= 3000) {
+        confetti({
+            particleCount: 150,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#FFD700', '#FFA500', '#FF4500']
+        });
+    }
+}
+
+// 3. イベントを送信する共通関数
+async function broadcastEvent(type, amount = 0) {
+    const startMsgs = [
+        `${userName}さんが実車になりました！どこへ向かうのでしょうか？`,
+        `お、${userName}さんがお客様を乗せました！`,
+        `${userName}さんが実車中。ロングの予感…！？`
+    ];
+    const endMsgs = [
+        `${userName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
+        `${userName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
+        `お疲れ様！${userName}さんが ¥${amount.toLocaleString()} を獲得しました！`
+    ];
+
+    const msg = type === 'start' 
+        ? startMsgs[Math.floor(Math.random() * startMsgs.length)]
+        : endMsgs[Math.floor(Math.random() * endMsgs.length)];
+
+    await db.collection(getPublicPath('events')).add({
+        uid: user.uid,
+        userName: userName,
+        type: type,
+        message: msg,
+        amount: amount,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+// 4. 既存のボタン処理に割り込み（フック）
+const originalRideOn = document.getElementById('btn-ride-on').onclick;
+document.getElementById('btn-ride-on').onclick = function(e) {
+    if(originalRideOn) originalRideOn.apply(this, arguments);
+    broadcastEvent('start');
+};
+
+const originalPaySubmit = document.getElementById('btn-pay-submit').onclick;
+document.getElementById('btn-pay-submit').onclick = function(e) {
+    // 既存の処理を実行
+    if(originalPaySubmit) originalPaySubmit.apply(this, arguments);
+    
+    // 金額を取得して放送（既存変数の currentInputAmount を利用）
+    const amount = parseInt(currentInputAmount) || 0;
+    if(amount > 0) broadcastEvent('end', amount);
+};
+
+// 5. 起動時にイベント監視を開始
+// initAppの中、またはその付近に追加
+setTimeout(listenToEvents, 5000);
         
         window.onload = initApp;
 
@@ -1535,6 +1759,8 @@ fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 setInterval(renderCanvas, 100); 
 </script>
-    
+
+
+
 </body>
 </html>
