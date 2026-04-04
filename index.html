@@ -860,7 +860,8 @@ function getBearing(start, end) {
 // 🔥 元ログの日付を使ってミリ秒生成（安全版）
 const log = salesLogs.find(l => l.id === editingLogId);
 
-const baseDate = new Date(log.dateStr);
+const [y, mo, da] = log.dateStr.split("-").map(Number);
+const baseDate = new Date(y, mo - 1, da);
 const [h, m] = time.split(":").map(Number);
 
 const pickupTimeMs = new Date(
@@ -1082,7 +1083,8 @@ function getBusinessTimestamp(log){
 
     const [h,m] = log.timeStr.split(':').map(Number);
 
-    const d = new Date(log.dateStr);
+    const [y, mo, da] = log.dateStr.split("-").map(Number);
+const d = new Date(y, mo - 1, da);
 
     d.setHours(h, m, 0, 0);
 
