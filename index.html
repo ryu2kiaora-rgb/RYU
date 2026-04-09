@@ -492,20 +492,41 @@ function initMap() {
     normalLayer.addTo(map);
 
     //大宮カメラマーカー
-const omiyaMarker = L.marker([35.9062,139.6233]).addTo(map);
+// 1. カメラアイコンの見た目を作成
+const cameraIcon = L.divIcon({
+    html: `<div style="
+        background-color: white; 
+        width: 35px; 
+        height: 35px; 
+        border-radius: 50%; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        border: 2px solid #2563eb;">
+        <i class="fa-solid fa-video" style="color: #2563eb; font-size: 18px;"></i>
+    </div>`,
+    className: 'custom-div-icon', // 余計な枠線を消すための設定
+    iconSize: [35, 35],
+    iconAnchor: [17, 17]
+});
 
+// 2. マーカーを作成（iconオプションを追加）
+const omiyaMarker = L.marker([35.9062, 139.6233], { icon: cameraIcon }).addTo(map);
+
+// 3. ポップアップの設定（ここは前のままでOK）
 omiyaMarker.bindPopup(`
-<b>大宮タクシープールカメラ</b><br><br>
-
-<button onclick="openOmiyaEast()" 
-style="width:100%;margin-bottom:6px;padding:8px;background:#2563eb;color:white;border:none;border-radius:6px;">
-東口カメラ
-</button>
-
-<button onclick="openOmiyaWest()" 
-style="width:100%;padding:8px;background:#64748b;color:white;border:none;border-radius:6px;">
-西口カメラ
-</button>
+    <div style="text-align:center;">
+        <b>大宮タクシープールカメラ</b><br><br>
+        <button onclick="window.openOmiyaEast()" 
+            style="width:100%;margin-bottom:6px;padding:8px;background:#2563eb;color:white;border:none;border-radius:6px;cursor:pointer;">
+            東口カメラ
+        </button>
+        <button onclick="window.openOmiyaWest()" 
+            style="width:100%;padding:8px;background:#64748b;color:white;border:none;border-radius:6px;cursor:pointer;">
+            西口カメラ
+        </button>
+    </div>
 `);
 
 
