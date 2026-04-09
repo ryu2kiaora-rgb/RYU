@@ -1840,26 +1840,30 @@ setInterval(renderCanvas, 100);
 
 // ===== 大宮カメラ =====
 
-function openOmiyaCamera(){
-    document.getElementById("omiyaCameraModal").style.display="flex";
-    switchCamera("east");
+window.openOmiyaCamera = function(){
+
+document.getElementById("omiyaCameraModal").style.display="flex";
+switchCamera("east");
+
 }
 
-function closeOmiyaCamera(){
-    document.getElementById("omiyaCameraModal").style.display="none";
+window.closeOmiyaCamera = function(){
+
+document.getElementById("omiyaCameraModal").style.display="none";
+
 }
 
-function switchCamera(type){
+window.switchCamera = function(type){
 
-    const frame = document.getElementById("omiyaCameraFrame");
+const frame = document.getElementById("omiyaCameraFrame");
 
-    if(type==="east"){
-        frame.src="http://omy.taxi-inf.jp/";
-    }
+if(type==="east"){
+frame.src="http://omy.taxi-inf.jp/";
+}
 
-    if(type==="west"){
-        frame.src="http://omy.taxi-inf.jp/nishi.php";
-    }
+if(type==="west"){
+frame.src="http://omy.taxi-inf.jp/nishi.php";
+}
 
 }
     
