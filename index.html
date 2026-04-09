@@ -500,6 +500,41 @@ function initMap() {
 }
 
 
+        normalLayer.addTo(map);
+
+// ===== 大宮駅カメラマーカー =====
+
+const omiyaIcon = L.divIcon({
+html: `
+<div style="
+background:#2563eb;
+color:white;
+width:36px;
+height:36px;
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:16px;
+box-shadow:0 4px 10px rgba(0,0,0,0.3);
+border:2px solid white;
+">
+<i class="fas fa-video"></i>
+</div>
+`,
+className:'',
+iconSize:[36,36],
+iconAnchor:[18,18]
+})
+
+const omiyaMarker = L.marker([35.9062,139.6233],{
+icon:omiyaIcon
+}).addTo(map)
+
+omiyaMarker.on("click",()=>{
+openOmiyaCamera()
+})
+
 
 // ===== Firebase節約モード（改良版） =====
 // --- 修正後のコード ---
@@ -1802,7 +1837,46 @@ setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 setInterval(renderCanvas, 100); 
 </script>
 
+<!-- 大宮タクシープールカメラ -->
+<div id="omiyaCameraModal" style="
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+background:rgba(0,0,0,0.7);
+display:none;
+align-items:center;
+justify-content:center;
+z-index:5000;
+">
 
+<div style="
+background:white;
+border-radius:16px;
+padding:12px;
+max-width:420px;
+width:90%;
+text-align:center;
+">
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+<b>大宮タクシープール</b>
+<button onclick="closeOmiyaCamera()" style="font-size:20px;border:none;background:none;cursor:pointer;">×</button>
+</div>
+
+<div style="display:flex;gap:6px;margin-bottom:8px;">
+<button onclick="switchCamera('east')" style="flex:1;padding:6px;border-radius:8px;background:#2563eb;color:white;border:none;">東口</button>
+<button onclick="switchCamera('west')" style="flex:1;padding:6px;border-radius:8px;background:#64748b;color:white;border:none;">西口</button>
+</div>
+
+<img id="omiyaCameraImg"
+src="http://omy.taxi-inf.jp/camera.jpg"
+style="width:100%;border-radius:10px;">
+
+</div>
+</div>
+    
 
 </body>
 </html>
