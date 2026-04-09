@@ -491,20 +491,9 @@ function initMap() {
     // 最初はカラー
     normalLayer.addTo(map);
 
+// ===== 大宮カメラマーカー =====
 
-    editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
-    .setView([35.6895, 139.6917], 15);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
-    .addTo(editMap);
-}
-
-
-        normalLayer.addTo(map);
-
-// ===== 大宮駅カメラマーカー =====
-
-const omiyaIcon = L.divIcon({
+const cameraIcon = L.divIcon({
 html: `
 <div style="
 background:#2563eb;
@@ -515,11 +504,11 @@ border-radius:50%;
 display:flex;
 align-items:center;
 justify-content:center;
-font-size:16px;
-box-shadow:0 4px 10px rgba(0,0,0,0.3);
+font-size:18px;
+box-shadow:0 4px 10px rgba(0,0,0,0.4);
 border:2px solid white;
 ">
-<i class="fas fa-video"></i>
+📹
 </div>
 `,
 className:'',
@@ -528,12 +517,23 @@ iconAnchor:[18,18]
 })
 
 const omiyaMarker = L.marker([35.9062,139.6233],{
-icon:omiyaIcon
+icon:cameraIcon
 }).addTo(map)
 
 omiyaMarker.on("click",()=>{
 openOmiyaCamera()
 })
+
+
+    editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
+    .setView([35.6895, 139.6917], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+    .addTo(editMap);
+}
+
+
+
 
 
 // ===== Firebase節約モード（改良版） =====
@@ -1835,7 +1835,34 @@ canvas.addEventListener('click', togglePiP);
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
 setInterval(renderCanvas, 100); 
-</script>
+</script
+
+
+// ===== 大宮カメラ =====
+
+function openOmiyaCamera(){
+    document.getElementById("omiyaCameraModal").style.display="flex";
+    switchCamera("east");
+}
+
+function closeOmiyaCamera(){
+    document.getElementById("omiyaCameraModal").style.display="none";
+}
+
+function switchCamera(type){
+
+    const frame = document.getElementById("omiyaCameraFrame");
+
+    if(type==="east"){
+        frame.src="http://omy.taxi-inf.jp/";
+    }
+
+    if(type==="west"){
+        frame.src="http://omy.taxi-inf.jp/nishi.php";
+    }
+
+}
+    
 
 <!-- 大宮タクシープールカメラ -->
 <div id="omiyaCameraModal" style="
@@ -1848,7 +1875,7 @@ background:rgba(0,0,0,0.7);
 display:none;
 align-items:center;
 justify-content:center;
-z-index:5000;
+z-index:9999;
 ">
 
 <div style="
@@ -1862,17 +1889,19 @@ text-align:center;
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
 <b>大宮タクシープール</b>
-<button onclick="closeOmiyaCamera()" style="font-size:20px;border:none;background:none;cursor:pointer;">×</button>
+<button onclick="closeOmiyaCamera()" style="font-size:22px;border:none;background:none;cursor:pointer;">×</button>
 </div>
 
 <div style="display:flex;gap:6px;margin-bottom:8px;">
-<button onclick="switchCamera('east')" style="flex:1;padding:6px;border-radius:8px;background:#2563eb;color:white;border:none;">東口</button>
-<button onclick="switchCamera('west')" style="flex:1;padding:6px;border-radius:8px;background:#64748b;color:white;border:none;">西口</button>
+<button onclick="switchCamera('east')" style="flex:1;padding:8px;border-radius:8px;background:#2563eb;color:white;border:none;">東口</button>
+<button onclick="switchCamera('west')" style="flex:1;padding:8px;border-radius:8px;background:#64748b;color:white;border:none;">西口</button>
 </div>
 
-<img id="omiyaCameraImg"
-src="http://omy.taxi-inf.jp/camera.jpg"
-style="width:100%;border-radius:10px;">
+<iframe
+id="omiyaCameraFrame"
+src=""
+style="width:100%;height:320px;border:none;border-radius:10px;">
+</iframe>
 
 </div>
 </div>
