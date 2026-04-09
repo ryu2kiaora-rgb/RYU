@@ -491,38 +491,22 @@ function initMap() {
     // 最初はカラー
     normalLayer.addTo(map);
 
-// ===== 大宮カメラマーカー =====
+    //大宮カメラマーカー
+const omiyaMarker = L.marker([35.9062,139.6233]).addTo(map);
 
-const cameraIcon = L.divIcon({
-html: `
-<div style="
-background:#2563eb;
-color:white;
-width:36px;
-height:36px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:18px;
-box-shadow:0 4px 10px rgba(0,0,0,0.4);
-border:2px solid white;
-">
-📹
-</div>
-`,
-className:'',
-iconSize:[36,36],
-iconAnchor:[18,18]
-})
+omiyaMarker.bindPopup(`
+<b>大宮タクシープールカメラ</b><br><br>
 
-const omiyaMarker = L.marker([35.9062,139.6233],{
-icon:cameraIcon
-}).addTo(map)
+<button onclick="openOmiyaEast()" 
+style="width:100%;margin-bottom:6px;padding:8px;background:#2563eb;color:white;border:none;border-radius:6px;">
+東口カメラ
+</button>
 
-omiyaMarker.on("click",()=>{
-openOmiyaCamera()
-})
+<button onclick="openOmiyaWest()" 
+style="width:100%;padding:8px;background:#64748b;color:white;border:none;border-radius:6px;">
+西口カメラ
+</button>
+`);
 
 
     editMap = L.map('edit-map', { zoomControl: false, attributionControl: false })
@@ -1839,74 +1823,13 @@ setInterval(renderCanvas, 100);
 
 <script>
 // ===== 大宮カメラ =====
-
-window.openOmiyaCamera = function(){
-
-document.getElementById("omiyaCameraModal").style.display="flex";
-switchCamera("east");
-
+function openOmiyaEast(){
+  window.open("http://omy.taxi-inf.jp/","_blank");
 }
 
-window.closeOmiyaCamera = function(){
-
-document.getElementById("omiyaCameraModal").style.display="none";
-
-}
-
-window.switchCamera = function(type){
-
-const frame = document.getElementById("omiyaCameraFrame");
-
-if(type==="east"){
-frame.src="http://omy.taxi-inf.jp/camera.jpg?"+Date.now();
-}
-
-if(type==="west"){
-frame.src="http://omy.taxi-inf.jp/nishi.jpg?"+Date.now();
-}
-
-}
-</script>    
-
-<!-- 大宮タクシープールカメラ -->
-<div id="omiyaCameraModal" style="
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-background:rgba(0,0,0,0.7);
-display:none;
-align-items:center;
-justify-content:center;
-z-index:9999;
-">
-
-<div style="
-background:white;
-border-radius:16px;
-padding:12px;
-max-width:420px;
-width:90%;
-text-align:center;
-">
-
-<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-<b>大宮タクシープール</b>
-<button onclick="closeOmiyaCamera()" style="font-size:22px;border:none;background:none;cursor:pointer;">×</button>
-</div>
-
-<div style="display:flex;gap:6px;margin-bottom:8px;">
-<button onclick="switchCamera('east')" style="flex:1;padding:8px;border-radius:8px;background:#2563eb;color:white;border:none;">東口</button>
-<button onclick="switchCamera('west')" style="flex:1;padding:8px;border-radius:8px;background:#64748b;color:white;border:none;">西口</button>
-</div>
-
-<img 
-id="omiyaCameraFrame"
-src=""
-style="width:100%;height:320px;object-fit:cover;border-radius:10px;">
-</div>
-</div>
+function openOmiyaWest(){
+  window.open("http://omy.taxi-inf.jp/nishi.php","_blank");
+</script>
     
 
 </body>
