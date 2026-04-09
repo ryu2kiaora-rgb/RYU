@@ -496,19 +496,18 @@ function initMap() {
 const cameraIcon = L.divIcon({
     html: `<div style="
         background-color: white; 
-        width: 35px; 
-        height: 35px; 
+        width: 28px;               /* 35px → 28px に縮小 */
+        height: 28px;              /* 35px → 28px に縮小 */
         border-radius: 50%; 
         display: flex; 
         align-items: center; 
         justify-content: center; 
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
         border: 2px solid #2563eb;">
-        <i class="fa-solid fa-video" style="color: #2563eb; font-size: 18px;"></i>
-    </div>`,
-    className: 'custom-div-icon', // 余計な枠線を消すための設定
-    iconSize: [35, 35],
-    iconAnchor: [17, 17]
+        <i class="fa-solid fa-video" style="color: #2563eb; font-size: 14px;"></i> </div>`,
+    className: 'custom-div-icon',
+    iconSize: [28, 28],            /* ここも合わせる */
+    iconAnchor: [14, 14]           /* 半分の数値（中心点）に合わせる */
 });
 
 // 2. マーカーを作成（iconオプションを追加）
