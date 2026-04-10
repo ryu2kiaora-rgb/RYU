@@ -446,14 +446,8 @@ async function initApp() {
         console.log("保存UID:", savedUID);
     }
 
-    // ★ userが存在するまで待つ or チェック
-    if (!user || !user.uid) {
-        console.log("まだuser未生成なのでイベント送信しない");
-        return;
-    }
-
-    console.log("🔥イベント送信テスト開始");
-    broadcastEvent("start");
+    // ❌ userチェックはここではしない
+    console.log("initApp完了");
 }
 
     auth.onAuthStateChanged(async (u) => {
