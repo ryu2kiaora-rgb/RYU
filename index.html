@@ -1554,40 +1554,64 @@ function showMapPerformance(data) {
     }
 }
 
-// 3. イベントを送信する共通関数
+        // 3. イベントを送信する共通関数
 async function broadcastEvent(type, amount = 0) {
 
+    // =====================
+    // ユーザー安全チェック
+    // =====================
+    if (!user || !user.uid) {
+        console.warn("user未生成のためイベント送信スキップ");
+        return;
+    }
+
+    const safeUserName = userName || "unknown";
+
+    // =====================
+    // メッセージ生成
+    // =====================
     const startMsgs = [
-        `${userName}さんが実車になりました！どこへ向かうのでしょうか？`,
-        `お、${userName}さんがお客様を乗せました！`,
-        `${userName}さんが実車中。ロングの予感…！？`
+        `${safeUserName}さんが実車になりました！どこへ向かうのでしょうか？`,
+        `お、${safeUserName}さんがお客様を乗せました！`,
+        `${safeUserName}さんが実車中。ロングの予感…！？`
     ];
 
     const endMsgs = [
-        `${userName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
-        `${userName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
-        `お疲れ様！${userName}さんが ¥${amount.toLocaleString()} を獲得しました！`
+        `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
+        `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
+        `お疲れ様！${safeUserName}さんが ¥${amount.toLocaleString()} を獲得しました！`
     ];
 
-    const msg = type === 'start'
+    const msg = (type === 'start')
         ? startMsgs[Math.floor(Math.random() * startMsgs.length)]
         : endMsgs[Math.floor(Math.random() * endMsgs.length)];
 
-    // ⭐ここがFirestore → GASに変更ポイント
-    await fetch(GAS_URL, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            mode: "event",
-            uid: user.uid,
-            userName: userName,
-            type: type,
-            message: msg,
-            amount: amount
-        })
-    });
+    // =====================
+    // GAS送信（CORS回避版）
+    // =====================
+    try {
+        await fetch(GAS_URL, {
+            method: "POST",
+            mode: "no-cors", // ⭐これが重要（CORS回避）
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                mode: "event",
+                uid: user.uid,
+                userName: safeUserName,
+                type: type,
+                message: msg,
+                amount: amount,
+                timestamp: Date.now()
+            })
+        });
+
+        console.log("イベント送信完了（no-cors）");
+
+    } catch (e) {
+        console.error("イベント送信エラー:", e);
+    }
 }
 
 // 4. 既存のボタン処理に割り込み（フック）
