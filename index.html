@@ -447,7 +447,9 @@ async function initApp() {
     }
 
     auth.onAuthStateChanged(async (u) => {
+
     if (u) {
+
         user = u;
 
         // UID保存
@@ -459,27 +461,26 @@ async function initApp() {
 
         fetchDrivers();
 
-        if(!driverInterval){
-            driverInterval = setInterval(fetchDrivers,30000)
+        if (!driverInterval) {
+            driverInterval = setInterval(fetchDrivers, 30000);
         }
+
+        document.getElementById('auth-loading-ui').classList.add('hidden');
+
+        if (userName) {
+            updateNameDisplay();
+            document.getElementById('start-shift-ui').classList.remove('hidden');
+        } else {
+            document.getElementById('registration-ui').classList.remove('hidden');
+        }
+
+    } else {
+
+        await auth.signInAnonymously();
 
     }
+
 });
-
-            document.getElementById('auth-loading-ui').classList.add('hidden');
-
-            if (userName) {
-                updateNameDisplay();
-                document.getElementById('start-shift-ui').classList.remove('hidden');
-            } else {
-                document.getElementById('registration-ui').classList.remove('hidden');
-            }
-
-        } else {
-            await auth.signInAnonymously();
-        }
-    });
-}
 
 function initMap() {
     if (map) return;
