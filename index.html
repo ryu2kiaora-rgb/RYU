@@ -440,14 +440,21 @@ function sendToGAS(data, logId){
 
 async function initApp() {
 
-    // ★ UID復元チェック（iPhoneリセット対策）
     const savedUID = localStorage.getItem("rideconnect_uid");
+
     if (savedUID) {
         console.log("保存UID:", savedUID);
     }
 
+    // ★ userが存在するまで待つ or チェック
+    if (!user || !user.uid) {
+        console.log("まだuser未生成なのでイベント送信しない");
+        return;
+    }
+
     console.log("🔥イベント送信テスト開始");
     broadcastEvent("start");
+}
 
     auth.onAuthStateChanged(async (u) => {
 
