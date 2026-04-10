@@ -447,16 +447,24 @@ async function initApp() {
     }
 
     auth.onAuthStateChanged(async (u) => {
-        if (u) {
-            user = u;
+    if (u) {
+        user = u;
 
-            // ★ UID保存
-            localStorage.setItem("rideconnect_uid", u.uid);
+        // UID保存
+        localStorage.setItem("rideconnect_uid", u.uid);
 
-            initMap();
-            initNumpad();
-            listenToSales();
-            listenToDrivers();
+        initMap();
+        initNumpad();
+        listenToSales();
+
+        fetchDrivers();
+
+        if(!driverInterval){
+            driverInterval = setInterval(fetchDrivers,30000)
+        }
+
+    }
+});
 
             document.getElementById('auth-loading-ui').classList.add('hidden');
 
