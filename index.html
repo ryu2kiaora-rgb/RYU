@@ -905,14 +905,12 @@ function getBearing(start, end) {
         `${periodLogs.length}件`;
 
     // 🔧 今日の営業日
-    const todayBusiness = getBusinessDate(now);
-
-    // 🔧 pickupTimeから営業日計算
-    const todayLogs = salesLogs.filter(l => {
-        if (!l.pickupTime) return false;
-        const d = new Date(l.pickupTime);
-        return getBusinessDate(d) === todayBusiness;
-    });
+    // 修正後（シンプルに）
+const todayStr = getBusinessDate(now);
+const todayLogs = salesLogs.filter(l => 
+    (l.dateStr === todayStr) || 
+    (l.pickupTime && getBusinessDate(l.pickupTime) === todayStr)
+);
 
     document.getElementById('today-sales').innerText =
         `¥${todayLogs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
@@ -1200,32 +1198,53 @@ function createMarkerHtml(name, status) {
 }
 
         function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
-        // ===== 営業日（昼12時区切り） =====
-function getBusinessDate(date){
+// ==================== 営業日関連ユーティリティ（置き換え） ====================
 
-    const d = new Date(date);
+/**
+ * 任意の日時から「営業日（YYYY-MM-DD）」を返す
+ * ルール: 12:00未満（深夜〜午前）なら前日扱い
+ */
+function getBusinessDate(dateInput) {
+    const d = new Date(dateInput);  // Dateオブジェクト or ミリ秒タイムスタンプ両対応
 
-    // 12時より前なら前日扱い
-    if(d.getHours() < 12){
+    // 12時より前（0〜11時59分）なら前日として扱う
+    if (d.getHours() < 12) {
         d.setDate(d.getDate() - 1);
     }
 
-    return formatDate(d);
+    return formatDate(d);  // 既存の formatDate をそのまま使用
 }
-        // ===== ★追加：営業日考慮タイムスタンプ =====
-function getBusinessTimestamp(log){
 
-    const [h,m] = log.timeStr.split(':').map(Number);
-
-    const d = new Date(log.dateStr);
-
-    d.setHours(h, m, 0, 0);
-
-    if(h < 12){
-        d.setDate(d.getDate() - 1);
+/**
+ * 営業日を考慮したソート用数値キー（同じ日の深夜も正しく並ぶ）
+ * 例: 2026-04-10 03:15 → 2026-04-09 + (27時間15分相当)
+ */
+function getBusinessSortKey(log) {
+    if (!log.pickupTime) {
+        // pickupTimeがない古いログは timeStr でフォールバック
+        const d = new Date(log.dateStr || "2000-01-01");
+        const [h, m] = (log.timeStr || "00:00").split(":").map(Number);
+        d.setHours(h, m, 0, 0);
+        return d.getTime();
     }
 
-    return d.getTime();
+    const pickup = new Date(log.pickupTime);
+    let businessDate = new Date(pickup);
+
+    if (pickup.getHours() < 12) {
+        businessDate.setDate(businessDate.getDate() - 1);
+    }
+
+    // 同じ営業日内で時系列ソートできるように、時間をそのまま加算（深夜でも正しい順序）
+    return businessDate.getTime() + (pickup.getHours() * 3600000) + (pickup.getMinutes() * 60000);
+}
+
+/**
+ * 日付を YYYY-MM-DD 形式にフォーマット（既存関数があればそのまま使用）
+ */
+function formatDate(date) {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
         function getPeriodRange(date, closing) {
@@ -1292,18 +1311,7 @@ function getBusinessTimestamp(log){
         function showDailyDetail(ds) {
             const logs = salesLogs
   .filter(l => l.dateStr === ds)
-  .sort((a, b) => {
-            // 営業時間を考慮した比較用の数値を作る関数
-            const getSortValue = (timeStr) => {
-                const [h, m] = timeStr.split(':').map(Number);
-                // 深夜（0時〜11時59分）なら24時間を足して「24時以降」として扱う
-                const adjustedHour = (h < 12) ? h + 24 : h;
-                return adjustedHour * 60 + m;
-            };
-
-            // ※a.timeStrを使って計算するように修正
-            return getSortValue(b.timeStr) - getSortValue(a.timeStr);
-        });
+.sort((a, b) => getBusinessSortKey(b) - getBusinessSortKey(a));
             const container = document.getElementById('ride-logs'); if (!container) return;
             document.getElementById('footer-daily-total').innerText =
   `¥${logs.reduce((s, l) => s + l.amount, 0).toLocaleString()}`;
