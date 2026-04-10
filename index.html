@@ -618,14 +618,17 @@ if(pos.coords.accuracy>120) return
 const lat = pos.coords.latitude
 const lng = pos.coords.longitude
 
-currentLat=lat
-currentLng=lng
+currentLat = lat
+currentLng = lng
+
+// ★ GASへ位置送信
+sendLocationToGAS()
 
 if(!map) return
 
 if(!userMarker){
 
-userMarker=L.marker([lat,lng],{
+userMarker = L.marker([lat,lng],{
 icon:L.divIcon({
 html:createMarkerHtml(userName,isDriving?'occupied':'on'),
 className:'',
@@ -635,6 +638,7 @@ iconSize:[0,0]
 
 map.setView([lat,lng],16)
 
+// Firestore同期（残しているなら）
 syncStatusToFirestore(true)
 
 }else{
@@ -653,6 +657,7 @@ maximumAge:15000,
 timeout:20000
 })
 
+// ★ 30秒ごとに強制同期（GPS止まったとき対策）
 startSyncInterval()
 
 }
@@ -667,6 +672,8 @@ const interval = isDriving ? 20000 : 180000
 syncInterval=setInterval(()=>{
 
 syncStatusToFirestore()
+
+    sendLocationToGAS()
 
 },interval)
 
