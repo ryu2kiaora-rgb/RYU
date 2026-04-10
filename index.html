@@ -366,7 +366,7 @@ window.addEventListener('resize', () => {
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwtjm_s9AFZi-hI383otbfqF81JtIIpIoqmxNgD7R1Kg7cVXh3s9EslMEl2jvkVa7kIYg/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbzu4rAyoLsvo3aeUZmtqhIpCskAkWTQc4BNMxwfm45tOg_6firRAj4XLrQVEtABVzHg_w/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -754,7 +754,6 @@ updateSalesUI()
 
 let driverInterval = null;
 
-// 1. fetchDriversを外に定義
 async function fetchDrivers() {
 
     if (currentLat === null || currentLng === null) return;
@@ -774,66 +773,62 @@ async function fetchDrivers() {
             activeDrivers[d.uid] = true;
             totalOnline++;
 
+            // 自分は表示しない
             if (user && d.uid === user.uid) return;
 
-            if (map) {
+            if (!map) return;
 
-                const icon = L.divIcon({
-                    html: createMarkerHtml(d.name, d.status),
-                    className: '',
-                    iconSize: [0, 0]
-                });
+            const icon = L.divIcon({
+                html: createMarkerHtml(d.name, d.status),
+                className: '',
+                iconSize: [0, 0]
+            });
 
-                const newPos = [d.lat, d.lng];
+            const newPos = [d.lat, d.lng];
 
-                if (otherMarkers[d.uid]) {
+            if (otherMarkers[d.uid]) {
 
-                    const marker = otherMarkers[d.uid];
-                    const prev = lastPositions[d.uid] || newPos;
+                const marker = otherMarkers[d.uid];
+                const prev = lastPositions[d.uid] || newPos;
 
-                    marker.setIcon(icon);
-                    animateMarker(marker, prev, newPos, 30000);
+                marker.setIcon(icon);
+                animateMarker(marker, prev, newPos, 30000);
 
-                } else {
+            } else {
 
-                    const marker = L.marker(newPos, { icon }).addTo(map);
-                    otherMarkers[d.uid] = marker;
+                const marker = L.marker(newPos, { icon }).addTo(map);
+                otherMarkers[d.uid] = marker;
 
-                }
-
-                lastPositions[d.uid] = newPos;
             }
+
+            lastPositions[d.uid] = newPos;
 
         });
 
+        // 消えたドライバー削除
         Object.keys(otherMarkers).forEach(id => {
+
             if (!activeDrivers[id]) {
+
                 if (map && otherMarkers[id]) {
                     map.removeLayer(otherMarkers[id]);
                 }
+
                 delete otherMarkers[id];
                 delete lastPositions[id];
             }
+
         });
 
+        // オンライン数
         const countEl = document.getElementById('online-count');
         if (countEl) countEl.innerText = totalOnline;
 
     } catch (e) {
+
         console.error("driver read error", e);
+
     }
-
-}
-
-// 2. listenToDriversは定期実行のスケジュール管理だけを行う
-async function fetchDrivers(){
-
-const res = await fetch(GAS_URL+"?mode=drivers")
-const drivers = await res.json()
-
-drivers.forEach(driver=>{
-updateDriverMarker(driver)
-})
 
 }
         setInterval(fetchDrivers,30000)
