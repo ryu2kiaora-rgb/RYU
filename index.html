@@ -1494,21 +1494,29 @@ loadPrediction()
 // ==========================================
 
 // 1. 通知受信用リスナー（Firestoreを介して他者の動きを検知）
-function listenToEvents() {
-    const eventPath = getPublicPath('events'); // イベント用コレクション
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+let lastEventTime = Date.now();
 
-    db.collection(eventPath)
-        .where('timestamp', '>', fiveMinutesAgo)
-        .onSnapshot(snap => {
-            snap.docChanges().forEach(change => {
-                if (change.type === "added") {
-                    const data = change.doc.data();
-                    if (data.uid === user.uid) return; // 自分のは無視
-                    showMapPerformance(data);
-                }
+function listenToEvents() {
+
+    setInterval(async () => {
+
+        const res = await fetch(
+            GAS_URL + `?mode=events&since=${lastEventTime}`
+        );
+
+        const events = await res.json();
+
+        if (events.length > 0) {
+
+            events.forEach(ev => {
+                if (ev.uid === user.uid) return;
+                showMapPerformance(ev);
             });
-        });
+
+            lastEventTime = Date.now();
+        }
+
+    }, 4000); // 4秒ごとにチェック
 }
 
 // 2. 地図上での演出実行
@@ -1538,28 +1546,37 @@ function showMapPerformance(data) {
 
 // 3. イベントを送信する共通関数
 async function broadcastEvent(type, amount = 0) {
+
     const startMsgs = [
         `${userName}さんが実車になりました！どこへ向かうのでしょうか？`,
         `お、${userName}さんがお客様を乗せました！`,
         `${userName}さんが実車中。ロングの予感…！？`
     ];
+
     const endMsgs = [
         `${userName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
         `${userName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
         `お疲れ様！${userName}さんが ¥${amount.toLocaleString()} を獲得しました！`
     ];
 
-    const msg = type === 'start' 
+    const msg = type === 'start'
         ? startMsgs[Math.floor(Math.random() * startMsgs.length)]
         : endMsgs[Math.floor(Math.random() * endMsgs.length)];
 
-    await db.collection(getPublicPath('events')).add({
-        uid: user.uid,
-        userName: userName,
-        type: type,
-        message: msg,
-        amount: amount,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    // ⭐ここがFirestore → GASに変更ポイント
+    await fetch(GAS_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            mode: "event",
+            uid: user.uid,
+            userName: userName,
+            type: type,
+            message: msg,
+            amount: amount
+        })
     });
 }
 
