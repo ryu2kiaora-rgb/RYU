@@ -446,6 +446,9 @@ async function initApp() {
         console.log("保存UID:", savedUID);
     }
 
+    console.log("🔥イベント送信テスト開始");
+    broadcastEvent("start");
+
     auth.onAuthStateChanged(async (u) => {
 
     if (u) {
