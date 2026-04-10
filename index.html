@@ -366,7 +366,7 @@ window.addEventListener('resize', () => {
             appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
         };
         const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycbwyLeb3qFk8GSG38oQFxqh0xnKh18hQnxbPJSO-I8pf06oWZwKftgosTFGAbIx4LFHF/exec"
+        const GAS_URL="https://script.google.com/macros/s/AKfycbwrKPG3g6X5yN3mppvpsJJOndTNN4RiwWwCvXLAV5F8BfmoKcqu7yspi52MpTdqMSj2Dg/exec"
 
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
@@ -661,6 +661,23 @@ syncStatusToFirestore()
 
 }
 
+function sendLocationToGAS(){
+
+fetch(GAS_URL,{
+method:"POST",
+body:JSON.stringify({
+mode:"location",
+uid:user.uid,
+name:userName,
+lat:currentLat,
+lng:currentLng,
+status:isDriving?"occupied":"on"
+})
+})
+
+}
+
+        
 
 // iPhone対策：画面復帰時にGPS再取得
 document.addEventListener("visibilitychange", () => {
@@ -726,33 +743,30 @@ updateSalesUI()
 
 let driverInterval = null;
 
-// 1. fetchDriversを外に定義（これでiPhone対策コードからも呼べるようになります）
+// 1. fetchDriversを外に定義
 async function fetchDrivers() {
+
     if (currentLat === null || currentLng === null) return;
 
-    const path = getPublicPath('drivers');
-
     try {
-        const now = new Date();
-        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
 
-        const snap = await db.collection(path)
-            .where('updatedAt', '>', fifteenMinutesAgo)
-            .get();
+        const res = await fetch(GAS_URL + "?mode=drivers");
+        const drivers = await res.json();
 
         let totalOnline = 0;
         const activeDrivers = {};
 
-        snap.forEach(doc => {
-            const d = doc.data();
+        drivers.forEach(d => {
+
             if (d.lat === undefined || d.lng === undefined) return;
 
-            activeDrivers[doc.id] = true;
+            activeDrivers[d.uid] = true;
             totalOnline++;
 
-            if (user && doc.id === user.uid) return;
+            if (user && d.uid === user.uid) return;
 
             if (map) {
+
                 const icon = L.divIcon({
                     html: createMarkerHtml(d.name, d.status),
                     className: '',
@@ -761,19 +775,24 @@ async function fetchDrivers() {
 
                 const newPos = [d.lat, d.lng];
 
-                if (otherMarkers[doc.id]) {
-                    const marker = otherMarkers[doc.id];
-                    const prev = lastPositions[doc.id] || newPos;
+                if (otherMarkers[d.uid]) {
+
+                    const marker = otherMarkers[d.uid];
+                    const prev = lastPositions[d.uid] || newPos;
 
                     marker.setIcon(icon);
                     animateMarker(marker, prev, newPos, 30000);
+
                 } else {
+
                     const marker = L.marker(newPos, { icon }).addTo(map);
-                    otherMarkers[doc.id] = marker;
+                    otherMarkers[d.uid] = marker;
+
                 }
 
-                lastPositions[doc.id] = newPos;
+                lastPositions[d.uid] = newPos;
             }
+
         });
 
         Object.keys(otherMarkers).forEach(id => {
@@ -792,17 +811,21 @@ async function fetchDrivers() {
     } catch (e) {
         console.error("driver read error", e);
     }
+
 }
 
 // 2. listenToDriversは定期実行のスケジュール管理だけを行う
-async function listenToDrivers() {
-    if (driverInterval) return;
+async function fetchDrivers(){
 
-    // 初回実行（5秒後）
-    setTimeout(fetchDrivers, 5000);
-    // 30秒ごとの定期実行
-    driverInterval = setInterval(fetchDrivers, 30000);
+const res = await fetch(GAS_URL+"?mode=drivers")
+const drivers = await res.json()
+
+drivers.forEach(driver=>{
+updateDriverMarker(driver)
+})
+
 }
+        setInterval(fetchDrivers,30000)
 
         function animateMarker(marker, start, end, duration = 30000) {
 
