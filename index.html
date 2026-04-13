@@ -461,8 +461,8 @@ async function initApp() {
 
         initMap();
         initNumpad();
-        listenToSales();
-
+        //listenToSales();
+        loadSalesFromGAS();
         fetchDrivers();
 
         if (!driverInterval) {
@@ -733,8 +733,36 @@ window.addEventListener("beforeunload", () => {
 
 });
 
+// ===== GASから売上ログと集計を取得（Firestoreを徐々に置き換え） =====
+async function loadSalesFromGAS() {
+    if (!user || !user.uid) return;
 
-function listenToSales() {
+    try {
+        const now = new Date();
+        const todayBusiness = getBusinessDate(now);
+
+        console.log(`[GAS Sales] 今日の営業日: ${todayBusiness}`);
+
+        const url = `${GAS_URL}?mode=sales&date=${todayBusiness}&driverId=${user.uid}`;
+        const res = await fetch(url);
+
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+        const result = await res.json();
+
+        salesLogs = result.logs || [];
+
+        console.log(`[GAS] 取得成功 → ${salesLogs.length}件 | ¥${result.todayTotal} | ${result.todayCount}回`);
+
+        updateSalesUI();        // UIを更新（本日の売上とログ一覧を表示）
+
+    } catch (e) {
+        console.error("GASからデータ取得失敗", e);
+    }
+}
+
+
+//function listenToSales() {
 
 const path = getPrivatePath('sales')
 if(!path) return
@@ -1274,6 +1302,8 @@ function getBusinessTimestamp(log){
             document.querySelectorAll('.nav-item').forEach(n => n.classList.replace('text-blue-600', 'text-gray-400'));
             document.getElementById('nav-' + tab).classList.replace('text-gray-400', 'text-blue-600');
             if(tab === 'home' && map) setTimeout(() => map.invalidateSize(), 200);
+            if (tab === 'sales') {
+        loadSalesFromGAS();
             // if(tab === 'home') refreshRanking(); // ホームに戻るたびにランキングを更新
         }
 
