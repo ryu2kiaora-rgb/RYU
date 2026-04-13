@@ -357,20 +357,23 @@ window.addEventListener('resize', () => {
 
     <script>
         // Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyDKL-O2tZZtj_MPZBqSNydZHe4NVUoZ1eI",
-            authDomain: "rideshare-7bc8e.firebaseapp.com",
-            projectId: "rideshare-7bc8e",
-            storageBucket: "rideshare-7bc8e.firebasestorage.app",
-            messagingSenderId: "949993698041",
-            appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
-        };
-        const appId = 'rideshare-connect-pro';
-        const GAS_URL="https://script.google.com/macros/s/AKfycby_RFVoHn6SGnDL-CltRGDQ_AxuqH9EaRTavcxDjC6RzmS-17zIjTU800VdVJqE2kARJQ/exec"
+const firebaseConfig = {
+    apiKey: "AIzaSyDKL-O2tZZtj_MPZBqSNydZHe4NVUoZ1eI",
+    authDomain: "rideshare-7bc8e.firebaseapp.com",
+    projectId: "rideshare-7bc8e",
+    storageBucket: "rideshare-7bc8e.firebasestorage.app",
+    messagingSenderId: "949993698041",
+    appId: "1:949993698041:web:d4aeb043e64d5fd71ee828"
+};
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+const appId = 'rideshare-connect-pro';
+
+// ★★★ ここを一番上に明確に定義 ★★★
+const GAS_URL = "https://script.google.com/macros/s/AKfycby_RFVoHn6SGnDL-CltRGDQ_AxuqH9EaRTavcxDjC6RzmS-17zIjTU800VdVJqE2kARJQ/exec";
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
@@ -733,9 +736,16 @@ window.addEventListener("beforeunload", () => {
 
 });
 
-// ===== GASから売上ログと集計を取得（Firestoreを徐々に置き換え） =====
+// ===== GASから今日の売上と乗車ログを取得 =====
 async function loadSalesFromGAS() {
-    if (!user || !user.uid) return;
+    if (!user || !user.uid) {
+        console.log("[GAS] userがまだありません");
+        return;
+    }
+    if (typeof GAS_URL === "undefined" || !GAS_URL) {
+        console.error("[GAS] GAS_URLが定義されていません！");
+        return;
+    }
 
     try {
         const now = new Date();
@@ -752,39 +762,13 @@ async function loadSalesFromGAS() {
 
         salesLogs = result.logs || [];
 
-        console.log(`[GAS] 取得成功 → ${salesLogs.length}件 | ¥${result.todayTotal} | ${result.todayCount}回`);
+        console.log(`[GAS] 取得成功 → ${salesLogs.length}件 | ¥${(result.todayTotal || 0).toLocaleString()} | ${result.todayCount || 0}回`);
 
-        updateSalesUI();        // UIを更新（本日の売上とログ一覧を表示）
+        updateSalesUI();
 
     } catch (e) {
         console.error("GASからデータ取得失敗", e);
     }
-}
-
-
-//function listenToSales() {
-
-const path = getPrivatePath('sales')
-if(!path) return
-
-const thirtyDaysAgo = new Date()
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 0)
-
-const dateLimit = formatDate(thirtyDaysAgo)
-
-db.collection(path)
-.where('dateStr','>=',dateLimit)
-.onSnapshot(snap=>{
-
-salesLogs = snap.docs.map(doc=>({
-id:doc.id,
-...doc.data()
-}))
-
-updateSalesUI()
-
-})
-
 }
 
 
@@ -1297,15 +1281,19 @@ function getBusinessTimestamp(log){
         };
 
         function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            document.getElementById('tab-' + tab).classList.add('active');
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.replace('text-blue-600', 'text-gray-400'));
-            document.getElementById('nav-' + tab).classList.replace('text-gray-400', 'text-blue-600');
-            if(tab === 'home' && map) setTimeout(() => map.invalidateSize(), 200);
-            if (tab === 'sales') {
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.replace('text-blue-600', 'text-gray-400'));
+    document.getElementById('nav-' + tab).classList.replace('text-gray-400', 'text-blue-600');
+
+    if(tab === 'home' && map) setTimeout(() => map.invalidateSize(), 200);
+
+    // 売上タブを開いたときにGASから再取得
+    if (tab === 'sales') {
         loadSalesFromGAS();
-            // if(tab === 'home') refreshRanking(); // ホームに戻るたびにランキングを更新
-        }
+    }
+}
 
         function initNumpad() {
             const container = document.getElementById('numpad');
