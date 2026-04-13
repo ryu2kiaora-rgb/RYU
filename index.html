@@ -904,15 +904,18 @@ function getBearing(start, end) {
     document.getElementById('month-total-count').innerText =
         `${periodLogs.length}件`;
 
-    // 🔧 今日の営業日（正午区切り）
+    // 🔧 今日の営業日（正午12時区切り）
     const todayBusiness = getBusinessDate(now);
 
-    // 🔧 pickupTime があるログだけを対象に、営業日でフィルタリング
+    // 🔧 pickupTimeベースで営業日を再計算（古いログ対応）
     const todayLogs = salesLogs.filter(l => {
-        if (!l.pickupTime) return l.dateStr === todayBusiness; // pickupTimeがない古いログはdateStrでフォールバック
+        if (!l.pickupTime) {
+            // pickupTimeがない古いログは dateStr でフォールバック
+            return l.dateStr === todayBusiness;
+        }
         
-        const logDate = new Date(l.pickupTime);
-        return getBusinessDate(logDate) === todayBusiness;
+        // pickupTimeがあるログは営業日ロジックで判定
+        return getBusinessDate(l.pickupTime) === todayBusiness;
     });
 
     document.getElementById('today-sales').innerText =
@@ -1202,29 +1205,30 @@ function createMarkerHtml(name, status) {
 
         function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
         
-// ===== 営業日（正午12時区切り） - 安全版（JST明示） =====
+// ===== 営業日（正午12時区切り） - 改善版（JST明示・安全） =====
 function getBusinessDate(dateInput) {
-    if (!dateInput) return formatDate(new Date());
+    if (!dateInput) {
+        dateInput = new Date();
+    }
 
     const date = new Date(dateInput);
-    
-    // 日本時間（JST）を確実に扱うために +9時間シフトして計算
-    const jstTime = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-    
-    const year = jstTime.getUTCFullYear();
-    const month = jstTime.getUTCMonth();
-    const day = jstTime.getUTCDate();
-    const hour = jstTime.getUTCHours();   // JSTの時間
 
-    if (hour < 12) {
-        // 0:00〜11:59 → 前日の営業日
-        const prevDate = new Date(Date.UTC(year, month, day - 1));
-        return formatDate(prevDate);
-    } else {
-        // 12:00〜23:59 → 当日の営業日
-        const todayDate = new Date(Date.UTC(year, month, day));
-        return formatDate(todayDate);
+    // 日本時間（JST = UTC+9）を確実に扱う
+    const utcMs = date.getTime();
+    const jstMs = utcMs + (9 * 60 * 60 * 1000);  // +9時間
+    const jstDate = new Date(jstMs);
+
+    const jstHour = jstDate.getUTCHours();   // これがJSTの時間になる
+
+    let targetDate = new Date(jstDate);  // コピー
+
+    if (jstHour < 12) {
+        // 0:00〜11:59 JST → 前日の営業日
+        targetDate.setUTCDate(targetDate.getUTCDate() - 1);
     }
+    // 12:00以降はそのまま当日
+
+    return formatDate(targetDate);
 }
         // ===== ★追加：営業日考慮タイムスタンプ =====
 function getBusinessTimestamp(log){
