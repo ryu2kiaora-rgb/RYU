@@ -686,20 +686,24 @@ syncStatusToFirestore()
 
 }
 
-function sendLocationToGAS(){
+function sendLocationToGAS() {
+    // もし fetch の前に currentLat などが正しいかチェックを入れるならここ
+    if (!user || !user.uid) return;
 
-fetch(GAS_URL,{
-method:"POST",
-body:JSON.stringify({
-mode:"location",
-uid:user.uid,
-name:userName,
-lat:currentLat,
-lng:currentLng,
-status:isDriving?"occupied":"on"
-})
-})
-
+    fetch(GAS_URL, {
+        method: "POST",
+        mode: "no-cors", // CORSエラーが出る場合は追加
+        body: JSON.stringify({
+            mode: "location",
+            uid: user.uid,
+            name: userName,
+            lat: currentLat,
+            lng: currentLng,
+            // --- ここを修正 ---
+            // 固定値ではなく、現在のステータス変数（driverStatus）をそのまま送る
+            status: driverStatus 
+        })
+    });
 }
 
         
