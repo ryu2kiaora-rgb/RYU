@@ -1584,12 +1584,9 @@ function showMapPerformance(data) {
     }
 }
 
-        // 3. イベントを送信する共通関数
+// 3. イベントを送信する共通関数（修正版）
 async function broadcastEvent(type, amount = 0) {
 
-    // =====================
-    // ユーザー安全チェック
-    // =====================
     if (!user || !user.uid) {
         console.warn("user未生成のためイベント送信スキップ");
         return;
@@ -1598,23 +1595,30 @@ async function broadcastEvent(type, amount = 0) {
     const safeUserName = userName || "unknown";
 
     // =====================
-    // メッセージ生成
+    // メッセージ生成（条件分岐を追加）
     // =====================
-    const startMsgs = [
-        `${safeUserName}さんが実車になりました！どこへ向かうのでしょうか？`,
-        `お、${safeUserName}さんがお客様を乗せました！`,
-        `${safeUserName}さんが実車中。ロングの予感…！？`
-    ];
+    let msg = ""; // 初期値は空
 
-    const endMsgs = [
-        `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
-        `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
-        `お疲れ様！${safeUserName}さんが ¥${amount.toLocaleString()} を獲得しました！`
-    ];
+    if (type === 'start') {
+        const startMsgs = [
+            `${safeUserName}さんが実車になりました！`,
+            `お、${safeUserName}さんがお客様を乗せました！`,
+            `${safeUserName}さんが実車中。ロングの予感…！？`
+        ];
+        msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
-    const msg = (type === 'start')
-        ? startMsgs[Math.floor(Math.random() * startMsgs.length)]
-        : endMsgs[Math.floor(Math.random() * endMsgs.length)];
+    } else if (type === 'end') {
+        const endMsgs = [
+            `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
+            `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
+            `お疲れ様！${safeUserName}さんが ¥${amount.toLocaleString()} を獲得しました！`
+        ];
+        msg = endMsgs[Math.floor(Math.random() * endMsgs.length)];
+
+    } else if (type === 'pickup') {
+        // 迎車のときは msg = "" のままにする（メッセージなし）
+        msg = "";
+    }
 
     // =====================
     // GAS送信（CORS回避版）
@@ -1622,7 +1626,7 @@ async function broadcastEvent(type, amount = 0) {
     try {
         await fetch(GAS_URL, {
             method: "POST",
-            mode: "no-cors", // ⭐これが重要（CORS回避）
+            mode: "no-cors",
             headers: {
                 "Content-Type": "application/json"
             },
@@ -1630,14 +1634,14 @@ async function broadcastEvent(type, amount = 0) {
                 mode: "event",
                 uid: user.uid,
                 userName: safeUserName,
-                type: type,
-                message: msg,
+                type: type,      // ここが 'pickup', 'start', 'end' のいずれか
+                message: msg,   // pickupの時は空文字が飛ぶ
                 amount: amount,
                 timestamp: Date.now()
             })
         });
 
-        console.log("イベント送信完了（no-cors）");
+        console.log("イベント送信完了:", type);
 
     } catch (e) {
         console.error("イベント送信エラー:", e);
