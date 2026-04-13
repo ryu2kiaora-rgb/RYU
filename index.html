@@ -72,12 +72,14 @@
     animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
     /* --- 改行と読みやすさの設定 --- */
-    white-space: pre-wrap;    /* 改行(\n)を有効にする */
-    word-wrap: break-word;    /* 長い単語を折り返す */
-    min-width: 100px;         /* 最低の幅 */
-    max-width: 200px;         /* 最大の幅 */
-    line-height: 1.4;         /* 行間 */
-    text-align: center;       /* 文字を中央寄せ */
+min-width: 140px;         /* ★ 100px から 140px にアップ（最低限の広さ） */
+    max-width: 280px;         /* ★ 200px から 280px にアップ（最大広がる幅） */
+    
+    padding: 10px 16px;       /* 左右の余白(16px)も少し広げるとゆったりします */
+    white-space: pre-wrap;    
+    word-wrap: break-word;    
+    line-height: 1.5;         /* 行間も少し広げると読みやすいです */
+    text-align: center;    /* 文字を中央寄せ */
 }
 
 /* 2. 吹き出しの「しっぽ」部分 */
