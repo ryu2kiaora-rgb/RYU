@@ -576,7 +576,8 @@ async function syncStatusToFirestore(force=false){
         const distance = calcDistance(lastLat, lastLng, currentLat, currentLng);
         if(distance < 80) return;
     }
-
+// --- Firestoreへの書き込みを停止（完全にコメントアウト） ---
+    /*
     const todayStr = getBusinessDate(new Date());
     const todayTotal = salesLogs
         .filter(l=>l.dateStr===todayStr)
@@ -607,6 +608,8 @@ async function syncStatusToFirestore(force=false){
         console.error("sync error", e);
     }
 }
+*/
+
 // [節約モード] GPS監視自体は行うが、Firebaseへの書き込み間隔を制御
 function startGPS(){
 
@@ -687,21 +690,23 @@ syncStatusToFirestore()
 }
 
 function sendLocationToGAS() {
-    // もし fetch の前に currentLat などが正しいかチェックを入れるならここ
-    if (!user || !user.uid) return;
+    if (!user || !user.uid || currentLat === null) return;
+
+    // 現在のステータスをGAS用に整える
+    let statusToSend = driverStatus; 
+    if (isDriving) statusToSend = "occupied"; // 実車中なら赤
+    if (statusToSend === "on" || statusToSend === "vacant") statusToSend = "vacant"; // 空車は青
 
     fetch(GAS_URL, {
         method: "POST",
-        mode: "no-cors", // CORSエラーが出る場合は追加
+        mode: "no-cors",
         body: JSON.stringify({
             mode: "location",
             uid: user.uid,
             name: userName,
             lat: currentLat,
             lng: currentLng,
-            // --- ここを修正 ---
-            // 固定値ではなく、現在のステータス変数（driverStatus）をそのまま送る
-            status: driverStatus 
+            status: statusToSend // これでGASのキャッシュが正しく書き換わる
         })
     });
 }
@@ -1212,19 +1217,17 @@ const heatData = Object.values(grid).map(g => [
   }).addTo(map);
 }        
 function createMarkerHtml(name, status) {
-
-    let color = '#3b82f6';
+    let color = '#3b82f6'; // デフォルト青（空車）
     let label = '空車';
 
     if(status === 'occupied'){
-        color = '#ef4444';
+        color = '#ef4444'; // 赤
         label = '実車';
-    }
-
-    if(status === 'pickup'){
-        color = '#eab308';
+    } else if(status === 'pickup'){
+        color = '#eab308'; // 黄
         label = '迎車';
     }
+    // statusが 'vacant' や 'on' の場合はデフォルトの青になります
 
     return `<div class="driver-marker-container">
         <div class="status-badge" style="background:${color}">${label}</div>
@@ -1398,29 +1401,28 @@ let lastTap = 0;
 
 document.getElementById('btn-recenter').onclick = async () => {
     const now = Date.now();
-    if (now - lastTap < 300) {
-        // ステータス反転
-        driverStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
 
-        if (driverStatus === "pickup") {
-            // 迎車メッセージが飛ぶ
+    if (now - lastTap < 300) {
+        // ステータスを反転
+        const newStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
+        
+        // 1. メッセージ付きでイベント送信
+        if (newStatus === "pickup") {
             await broadcastEvent('pickup'); 
         } else {
-            // 「空車になりました」メッセージが飛ぶ（amount 0 で送信）
-            await broadcastEvent('end', 0); 
+            await broadcastEvent('end', 0); // 0円で空車戻り
         }
 
-        // 自分のアイコン更新
+        // 2. 自分の画面も即座に更新
         if(userMarker){
-            const icon = L.divIcon({
+            userMarker.setIcon(L.divIcon({
                 html: createMarkerHtml(userName, driverStatus),
                 className: '',
                 iconSize: [0,0]
-            });
-            userMarker.setIcon(icon);
+            }));
         }
     } else {
-        // シングルタップ：現在地移動
+        // シングルタップ：現在地へ戻る
         if (userMarker) {
             map.flyTo(userMarker.getLatLng(), 16, { animate: true });
         }
@@ -1580,27 +1582,24 @@ async function broadcastEvent(type, amount = 0) {
     const safeUserName = userName || "unknown";
 
     let msg = ""; 
+    let finalType = type;
 
     if (type === 'start') {
-        const msgs = [`${safeUserName}さんが実車になりました！`, `お、${safeUserName}さんがお客様を乗せました！`];
-        msg = msgs[Math.floor(Math.random() * msgs.length)];
+        msg = `${safeUserName}さんが実車になりました！`;
+        driverStatus = "occupied"; // 変数も更新
 
     } else if (type === 'end') {
-        // 到着（空車戻り）の時。金額が0ならシンプルに「空車」とだけ報告
         if (amount > 0) {
-            msg = `${safeUserName}さんが到着しました！(¥${amount.toLocaleString()}獲得)`;
+            msg = `${safeUserName}さんが到着しました！(¥${amount.toLocaleString()})`;
         } else {
             msg = `${safeUserName}さんが空車になりました。`;
         }
+        driverStatus = "vacant"; // 変数も更新
+        finalType = 'end';
 
     } else if (type === 'pickup') {
-        // ★迎車の時もメッセージを出す！
-        const pickupMsgs = [
-            `${safeUserName}さんが迎車（お迎え）に向かっています！`,
-            `${safeUserName}さんが迎車モードに入りました。`,
-            `お、${safeUserName}さんに配車依頼が入ったようです！`
-        ];
-        msg = pickupMsgs[Math.floor(Math.random() * pickupMsgs.length)];
+        msg = `${safeUserName}さんが迎車（お迎え）に向かっています！`;
+        driverStatus = "pickup"; // 変数も更新
     }
 
     try {
@@ -1611,12 +1610,14 @@ async function broadcastEvent(type, amount = 0) {
                 mode: "event",
                 uid: user.uid,
                 userName: safeUserName,
-                type: type,
+                type: finalType,
                 message: msg,
                 amount: amount,
                 timestamp: Date.now()
             })
         });
+        // 送信直後に位置情報も送ってキャッシュを確実に固める
+        sendLocationToGAS();
     } catch (e) { console.error(e); }
 }
 
