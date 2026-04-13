@@ -1314,18 +1314,49 @@ function getBusinessTimestamp(log){
 }
 
         function initNumpad() {
-            const container = document.getElementById('numpad');
-            ["1","2","3","4","5","6","7","8","9","C","0","00"].forEach(val => {
-                const btn = document.createElement('button');
-                btn.className = "bg-slate-100 py-4 rounded-xl font-bold active:bg-slate-200 text-xl"; btn.innerText = val;
-                btn.onclick = () => {
-                    if (val === 'C') currentInputAmount = "";
-                    else if (currentInputAmount.length < 8) currentInputAmount += val;
-                    document.getElementById('input-display').innerText = `¥ ${Number(currentInputAmount).toLocaleString()}`;
-                };
-                container.appendChild(btn);
-            });
-        }
+    const container = document.getElementById('numpad');
+    // コンテナを一度空にする（二重描画防止）
+    container.innerHTML = '';
+
+    ["1","2","3","4","5","6","7","8","9","C","0","00"].forEach(val => {
+        const btn = document.createElement('button');
+        btn.className = "bg-slate-100 py-4 rounded-xl font-bold active:bg-slate-200 text-xl"; 
+        btn.innerText = val;
+
+        btn.onclick = () => {
+            if (val === 'C') {
+                // --- 「C」ボタン：リセット処理 ---
+                currentInputAmount = ""; 
+                
+                // 1. 自分の状態を「空車」にリセット
+                isDriving = false;        
+                driverStatus = "vacant"; 
+
+                // 2. 仲間に報告（メッセージなしの空車戻し）
+                broadcastEvent('silent_end'); 
+
+                // 3. 自分の地図上のアイコンを即座に青に戻す
+                if (userMarker) {
+                    userMarker.setIcon(L.divIcon({
+                        html: createMarkerHtml(userName, 'vacant'),
+                        className: '',
+                        iconSize: [0, 0]
+                    }));
+                }
+                console.log("Cボタン：状態をリセットしました");
+
+            } else if (currentInputAmount.length < 8) {
+                // --- 数字ボタン：入力処理 ---
+                currentInputAmount += val;
+            }
+
+            // 金額表示の更新（カンマ区切り）
+            const displayAmount = currentInputAmount === "" ? "0" : Number(currentInputAmount).toLocaleString();
+            document.getElementById('input-display').innerText = `¥ ${displayAmount}`;
+        };
+        container.appendChild(btn);
+    });
+}
 
         function renderCalendar() {
             const grid = document.getElementById('calendar-grid'); if (!grid) return;
