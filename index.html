@@ -1231,44 +1231,36 @@ function createMarkerHtml(name, status) {
 
         function formatDate(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
         
-// ===== 営業日（正午12時区切り） - 改善版（JST明示・安全） =====
+
+// ===== 営業日（正午12時区切り） - 修正版 =====
 function getBusinessDate(dateInput) {
-    if (!dateInput) {
-        dateInput = new Date();
+    // 入力がなければ現在時刻（日本時間）を使用
+    const d = dateInput ? new Date(dateInput) : new Date();
+
+    // ブラウザの時間はすでに日本時間なので、そのままgetHours()を使う
+    const hour = d.getHours();
+
+    // 昼12時より前なら、営業日としては「前日の日付」にする
+    if (hour < 12) {
+        d.setDate(d.getDate() - 1);
     }
 
-    const date = new Date(dateInput);
-
-    // 日本時間（JST = UTC+9）を確実に扱う
-    const utcMs = date.getTime();
-    const jstMs = utcMs + (9 * 60 * 60 * 1000);  // +9時間
-    const jstDate = new Date(jstMs);
-
-    const jstHour = jstDate.getUTCHours();   // これがJSTの時間になる
-
-    let targetDate = new Date(jstDate);  // コピー
-
-    if (jstHour < 12) {
-        // 0:00〜11:59 JST → 前日の営業日
-        targetDate.setUTCDate(targetDate.getUTCDate() - 1);
-    }
-    // 12:00以降はそのまま当日
-
-    return formatDate(targetDate);
+    // YYYY-MM-DD 形式で返す
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
-        // ===== ★追加：営業日考慮タイムスタンプ =====
+
+// ===== 営業日考慮タイムスタンプも修正 =====
 function getBusinessTimestamp(log){
-
-    const [h,m] = log.timeStr.split(':').map(Number);
-
+    const [h, m] = log.timeStr.split(':').map(Number);
     const d = new Date(log.dateStr);
 
     d.setHours(h, m, 0, 0);
 
-    if(h < 12){
-        d.setDate(d.getDate() - 1);
-    }
-
+    // log.dateStr がすでに営業日の日付なので、
+    // ここでさらに日付を引く必要はありません（引くと2重で引くことになります）
     return d.getTime();
 }
 
