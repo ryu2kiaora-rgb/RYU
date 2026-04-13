@@ -772,6 +772,11 @@ async function loadSalesFromGAS() {
 }
 
 
+        function syncNow(){
+    sendLocationToGAS(); // 自分の状態をGASに送る
+    fetchDrivers();      // 他の人の状態をすぐ取り直す
+}
+
        
         // [節約モード] 他者の位置情報はリアルタイムだが、ランキングとは分離
 
@@ -1015,6 +1020,7 @@ await fetch(GAS_URL, {
     amount: amount
   })
 });
+                await loadSalesFromGAS();
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
@@ -1031,7 +1037,10 @@ body:JSON.stringify({
 mode:"delete",
 logId:editingLogId
 })
-})
+});
+
+        // ★ これ追加（超重要）
+        await loadSalesFromGAS();
             }
             document.getElementById('modal-edit-log').classList.add('hidden');
         };
