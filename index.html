@@ -1787,29 +1787,21 @@ async function fetchRankingWithDelay() {
     setTimeout(async () => {
         try {
             const res = await fetch(GAS_URL + "?mode=ranking");
-            const rawData = await res.json();
-            
-            const summary = {};
-            rawData.forEach(d => {
-                if(!summary[d.driverId]) {
-                    summary[d.driverId] = { name: d.userName, total: 0, count: 0, max: 0 };
-                }
-                summary[d.driverId].total += d.amount;
-                summary[d.driverId].count += 1;
-                if(d.amount > summary[d.driverId].max) summary[d.driverId].max = d.amount;
-            });
+            const rawData = await res.json(); 
 
-            const drivers = Object.keys(summary).map(id => ({
-                id, name: summary[id].name,
-                total: summary[id].total,
-                count: summary[id].count,
-                avg: Math.floor(summary[id].total / summary[id].count),
-                max: summary[id].max,
-                isMe: id === (typeof user !== 'undefined' ? user?.uid : null)
+            // --- ここでGASからのデータを整理 ---
+            const drivers = rawData.map(d => ({
+                id: d.driverId,
+                name: d.userName,
+                total: d.amount,      // GASで合計済み
+                count: d.count || 1,  // GASから届く件数を使う
+                avg: Math.floor(d.amount / (d.count || 1)),
+                max: d.max || d.amount,
+                isMe: d.driverId === (typeof user !== 'undefined' ? user?.uid : null)
             }));
 
             // 4つのランキングを作成
-            const createList = (sortKey) => [...drivers].sort((a,b) => b[sortKey] - a[sortKey]).slice(0, 5);
+            const createList = (sortKey) => [...drivers].sort((a,b) => b[sortKey] - a[sortKey]);
             
             const newAllData = {
                 "売上": createList('total'),
@@ -1818,14 +1810,24 @@ async function fetchRankingWithDelay() {
                 "最高単価": createList('max')
             };
 
-            // 順位変動チェック（売上の時だけ通知する例）
-            const oldMeIdx = allRankingData["売上"].findIndex(d => d.isMe);
-            const newMeIdx = newAllData["売上"].findIndex(d => d.isMe);
-            if (newMeIdx > oldMeIdx && oldMeIdx !== -1) addNotification("売上順位ダウン！");
+            // 順位変動チェック
+            if (allRankingData && allRankingData["売上"]) {
+                const oldMeIdx = allRankingData["売上"].findIndex(d => d.isMe);
+                const newMeIdx = newAllData["売上"].findIndex(d => d.isMe);
+                if (newMeIdx > oldMeIdx && oldMeIdx !== -1) {
+                    if (typeof addNotification === 'function') addNotification("売上順位ダウン！");
+                }
+            }
 
             allRankingData = newAllData;
             lastFetchTime = Date.now();
-        } catch (e) { console.error("Fetch Error:", e); }
+            
+            // UI更新の関数があればここで呼ぶ
+            if (typeof updateRankingUI === 'function') updateRankingUI();
+
+        } catch (e) { 
+            console.error("Fetch Error:", e); 
+        }
     }, jitter);
 }
 
