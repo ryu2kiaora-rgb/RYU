@@ -687,21 +687,29 @@ syncStatusToFirestore()
 }
 
 function sendLocationToGAS() {
-    // もし fetch の前に currentLat などが正しいかチェックを入れるならここ
-    if (!user || !user.uid) return;
+    // 1. 準備ができていなければ何もしない
+    if (!user || !user.uid || currentLat === null) return;
 
+    // 2. 今の自分の状態を確認する
+    let statusToSend = driverStatus; 
+    
+    // 3. もし「実車中」なら、強制的に occupied（赤）にする
+    if (isDriving) statusToSend = "occupied";
+    
+    // 4. もし「on」や「空車」という古い名前だったら vacant（青）に直す
+    if (statusToSend === "on" || statusToSend === "vacant") statusToSend = "vacant";
+
+    // 5. GASに最新の情報を届ける
     fetch(GAS_URL, {
         method: "POST",
-        mode: "no-cors", // CORSエラーが出る場合は追加
+        mode: "no-cors",
         body: JSON.stringify({
             mode: "location",
             uid: user.uid,
             name: userName,
             lat: currentLat,
             lng: currentLng,
-            // --- ここを修正 ---
-            // 固定値ではなく、現在のステータス変数（driverStatus）をそのまま送る
-            status: driverStatus 
+            status: statusToSend // これでGAS側の「色塗り」と名前が一致します
         })
     });
 }
@@ -1657,21 +1665,37 @@ async function broadcastEvent(type, amount = 0) {
     }
 }
 
-// 4. 既存のボタン処理に割り込み（フック）
+// ===== ステータス連動・完全同期版（貼り換え用） =====
+
+// 1. 【実車開始】ボタンへの割り込み
 const originalRideOn = document.getElementById('btn-ride-on').onclick;
 document.getElementById('btn-ride-on').onclick = function(e) {
+    // 元々のタイマー開始などの処理を実行
     if(originalRideOn) originalRideOn.apply(this, arguments);
+
+    // --- ここから追加：名札を赤（実車）にして報告 ---
+    driverStatus = "occupied"; 
     broadcastEvent('start');
 };
 
+// 2. 【支払い完了】ボタンへの割り込み
 const originalPaySubmit = document.getElementById('btn-pay-submit').onclick;
 document.getElementById('btn-pay-submit').onclick = function(e) {
-    // 既存の処理を実行
+    // 元々のデータ保存処理などを実行
     if(originalPaySubmit) originalPaySubmit.apply(this, arguments);
     
-    // 金額を取得して放送（既存変数の currentInputAmount を利用）
+    // --- ここから追加：名札を青（空車）にして報告 ---
     const amount = parseInt(currentInputAmount) || 0;
-    if(amount > 0) broadcastEvent('end', amount);
+    
+    // 到着報告（金額があれば金額付き、なければシンプルに空車報告）
+    if(amount > 0) {
+        broadcastEvent('end', amount);
+    } else {
+        broadcastEvent('end', 0);
+    }
+    
+    // 最後に名札を空車に戻す
+    driverStatus = "vacant"; 
 };
 
 // 5. 起動時にイベント監視を開始
