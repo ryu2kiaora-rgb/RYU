@@ -1398,48 +1398,33 @@ let lastTap = 0;
 
 document.getElementById('btn-recenter').onclick = async () => {
     const now = Date.now();
-
-    // 1. ダブルタップ判定（迎車モード切替）
     if (now - lastTap < 300) {
-        // ステータスを反転（pickup ↔ vacant）
-        const newStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
-        driverStatus = newStatus;
+        // ステータス反転
+        driverStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
 
-        // GASへ信号を飛ばす
-        if (newStatus === "pickup") {
-            // 迎車モードへ：メッセージなしで送信
+        if (driverStatus === "pickup") {
+            // 迎車メッセージが飛ぶ
             await broadcastEvent('pickup'); 
         } else {
-            // 空車モードへ：★メッセージを出さない専用の 'silent_end' を呼ぶ
-            await broadcastEvent('silent_end'); 
+            // 「空車になりました」メッセージが飛ぶ（amount 0 で送信）
+            await broadcastEvent('end', 0); 
         }
 
-        console.log("迎車モード切替:", newStatus);
-
-        // 自分のマーカーを即座に更新
+        // 自分のアイコン更新
         if(userMarker){
             const icon = L.divIcon({
-                html: createMarkerHtml(userName, newStatus),
+                html: createMarkerHtml(userName, driverStatus),
                 className: '',
                 iconSize: [0,0]
             });
             userMarker.setIcon(icon);
         }
-    } 
-    // 2. シングルタップ判定（現在地へ戻る）
-    else {
+    } else {
+        // シングルタップ：現在地移動
         if (userMarker) {
-            const latlng = userMarker.getLatLng();
-            map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
-        } else {
-            if (typeof moveToCurrentLocation === "function") {
-                moveToCurrentLocation();
-            } else {
-                alert("現在地を取得中です...");
-            }
+            map.flyTo(userMarker.getLatLng(), 16, { animate: true });
         }
     }
-
     lastTap = now;
 };
 
@@ -1590,71 +1575,49 @@ function showMapPerformance(data) {
     }
 }
 
-// 3. イベントを送信する共通関数（メッセージ制御版）
 async function broadcastEvent(type, amount = 0) {
-
-    if (!user || !user.uid) {
-        console.warn("user未生成のためイベント送信スキップ");
-        return;
-    }
-
+    if (!user || !user.uid) return;
     const safeUserName = userName || "unknown";
 
-    // =====================
-    // メッセージ生成
-    // =====================
     let msg = ""; 
-    let finalType = type;
 
     if (type === 'start') {
-        const startMsgs = [
-            `${safeUserName}さんが実車になりました！`,
-            `お、${safeUserName}さんがお客様を乗せました！`,
-            `${safeUserName}さんが実車中。ロングの予感…！？`
-        ];
-        msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
+        const msgs = [`${safeUserName}さんが実車になりました！`, `お、${safeUserName}さんがお客様を乗せました！`];
+        msg = msgs[Math.floor(Math.random() * msgs.length)];
 
     } else if (type === 'end') {
-        // 通常の「到着ボタン」の時はメッセージを生成
-        const endMsgs = [
-            `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
-            `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
-            `お疲れ様！${safeUserName}さんが ¥${amount.toLocaleString()} を獲得しました！`
-        ];
-        msg = endMsgs[Math.floor(Math.random() * endMsgs.length)];
+        // 到着（空車戻り）の時。金額が0ならシンプルに「空車」とだけ報告
+        if (amount > 0) {
+            msg = `${safeUserName}さんが到着しました！(¥${amount.toLocaleString()}獲得)`;
+        } else {
+            msg = `${safeUserName}さんが空車になりました。`;
+        }
 
     } else if (type === 'pickup') {
-        // 迎車はメッセージなし
-        msg = "";
-
-    } else if (type === 'silent_end') {
-        // ★新設：ダブルタップで「空車」に戻る時専用
-        msg = "";       // メッセージを空にする
-        finalType = 'end'; // GAS側には 'end' として送り、ステータスを vacant にさせる
+        // ★迎車の時もメッセージを出す！
+        const pickupMsgs = [
+            `${safeUserName}さんが迎車（お迎え）に向かっています！`,
+            `${safeUserName}さんが迎車モードに入りました。`,
+            `お、${safeUserName}さんに配車依頼が入ったようです！`
+        ];
+        msg = pickupMsgs[Math.floor(Math.random() * pickupMsgs.length)];
     }
 
-    // =====================
-    // GAS送信
-    // =====================
     try {
         await fetch(GAS_URL, {
             method: "POST",
             mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 mode: "event",
                 uid: user.uid,
                 userName: safeUserName,
-                type: finalType,  // silent_end の場合はここで 'end' に変換されて飛ぶ
-                message: msg,     // 空文字が飛ぶので、0円獲得メッセージが出なくなる
+                type: type,
+                message: msg,
                 amount: amount,
                 timestamp: Date.now()
             })
         });
-        console.log("イベント送信完了:", finalType);
-    } catch (e) {
-        console.error("イベント送信エラー:", e);
-    }
+    } catch (e) { console.error(e); }
 }
 
 // 4. 既存のボタン処理に割り込み（フック）
