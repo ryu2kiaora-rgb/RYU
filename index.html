@@ -1393,45 +1393,43 @@ function changeMonth(dir) { currentViewDate.setMonth(currentViewDate.getMonth() 
 let lastTap = 0;
 
 document.getElementById('btn-recenter').onclick = async () => {
-
     const now = Date.now();
 
     // ダブルタップ判定
     if (now - lastTap < 300) {
-
-        const ref = db
-        .collection(getPublicPath('drivers'))
-        .doc(user.uid);
-
-        const snap = await ref.get();
-        const d = snap.data();
-
-        let newStatus = "pickup";
-
-        if (d.status === "pickup") newStatus = "on";
-
-        await ref.update({
-            status: newStatus
-        });
-
+        // ステータスを反転（今の状態が pickup なら vacant、そうでなければ pickup）
+        // ※あなたのコードの "on" は "vacant"（空車）に読み替えています
+        const newStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
+        
+        // 1. ローカル変数を更新
         driverStatus = newStatus;
 
-        console.log("迎車モード:", newStatus);
-                // ⭐ここ追加
-        if(userMarker){
+        // 2. GASへ信号を飛ばす（メッセージなしでアイコン色だけ即変え）
+        // broadcastEvent内で type: 'pickup' や 'end' として送信されます
+        if (newStatus === "pickup") {
+            await broadcastEvent('pickup'); 
+        } else {
+            await broadcastEvent('end'); // 空車に戻る
+        }
 
+        console.log("迎車モード切替:", newStatus);
+
+        // 3. 自分のマーカーを即座に更新（黄色 #eab308 になる）
+        if(userMarker){
             const icon = L.divIcon({
                 html: createMarkerHtml(userName, newStatus),
                 className: '',
                 iconSize: [0,0]
             });
-
             userMarker.setIcon(icon);
-
         }
+    } else {
+        // シングルタップ時は通常のセンター移動（既存の処理があれば）
+        if (typeof moveToCurrentLocation === "function") moveToCurrentLocation();
     }
 
     lastTap = now;
+};
 
     // 既存の現在地戻る機能
     if (userMarker) {
