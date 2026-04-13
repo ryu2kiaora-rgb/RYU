@@ -1107,6 +1107,11 @@ logId:editingLogId
             
             // Google Apps Scriptへの送信
             sendToGAS(data, docRef.id);
+
+// ★追加
+setTimeout(() => {
+    loadSalesFromGAS();
+}, 500);
             
             // 状態のクリア
             localStorage.removeItem("rideStart");
