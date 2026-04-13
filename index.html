@@ -1600,69 +1600,50 @@ function showMapPerformance(data) {
 
 // 3. イベントを送信する共通関数（メッセージ制御版）
 async function broadcastEvent(type, amount = 0) {
-
-    if (!user || !user.uid) {
-        console.warn("user未生成のためイベント送信スキップ");
-        return;
-    }
-
+    if (!user || !user.uid) return;
     const safeUserName = userName || "unknown";
 
-    // =====================
-    // メッセージ生成
-    // =====================
     let msg = ""; 
     let finalType = type;
 
+    // --- ★ここで「自分の名札」もセットで更新する ---
     if (type === 'start') {
-        const startMsgs = [
-            `${safeUserName}さんが実車になりました！`,
-            `お、${safeUserName}さんがお客様を乗せました！`,
-            `${safeUserName}さんが実車中。ロングの予感…！？`
-        ];
+        driverStatus = "occupied"; // 実車
+        const startMsgs = [`${safeUserName}さんが実車になりました！`, `お、${safeUserName}さんがお客様を乗せました！` ];
         msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
-    } else if (type === 'end') {
-        // 通常の「到着ボタン」の時はメッセージを生成
-        const endMsgs = [
-            `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
-            `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
-            `お疲れ様！${safeUserName}さんが ¥${amount.toLocaleString()} を獲得しました！`
-        ];
-        msg = endMsgs[Math.floor(Math.random() * endMsgs.length)];
+    } else if (type === 'end' || type === 'silent_end') {
+        driverStatus = "vacant";   // 空車
+        finalType = 'end';
+        if (type === 'end' && amount > 0) {
+            msg = `${safeUserName}さんが到着しました！(¥${amount.toLocaleString()})`;
+        } else {
+            msg = ""; // 0円やサイレントの時はメッセージなし
+        }
 
     } else if (type === 'pickup') {
-        // 迎車はメッセージなし
-        msg = "";
-
-    } else if (type === 'silent_end') {
-        // ★新設：ダブルタップで「空車」に戻る時専用
-        msg = "";       // メッセージを空にする
-        finalType = 'end'; // GAS側には 'end' として送り、ステータスを vacant にさせる
+        driverStatus = "pickup";   // 迎車
+        msg = ""; // 迎車はメッセージなし（出すならここに入れる）
     }
 
-    // =====================
-    // GAS送信
-    // =====================
+    // GAS送信処理（以下略）
     try {
         await fetch(GAS_URL, {
             method: "POST",
             mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 mode: "event",
                 uid: user.uid,
                 userName: safeUserName,
-                type: finalType,  // silent_end の場合はここで 'end' に変換されて飛ぶ
-                message: msg,     // 空文字が飛ぶので、0円獲得メッセージが出なくなる
+                type: finalType,
+                message: msg,
                 amount: amount,
                 timestamp: Date.now()
             })
         });
-        console.log("イベント送信完了:", finalType);
-    } catch (e) {
-        console.error("イベント送信エラー:", e);
-    }
+        // ★送信直後に「今の状態」を即座にGASへ念押しする
+        sendLocationToGAS(); 
+    } catch (e) { console.error(e); }
 }
 
 // ===== ステータス連動・完全同期版（貼り換え用） =====
