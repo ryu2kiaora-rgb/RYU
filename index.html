@@ -1395,26 +1395,22 @@ let lastTap = 0;
 document.getElementById('btn-recenter').onclick = async () => {
     const now = Date.now();
 
-    // ダブルタップ判定
+    // 1. ダブルタップ判定（迎車モード切替）
     if (now - lastTap < 300) {
-        // ステータスを反転（今の状態が pickup なら vacant、そうでなければ pickup）
-        // ※あなたのコードの "on" は "vacant"（空車）に読み替えています
+        // ステータスを反転
         const newStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
-        
-        // 1. ローカル変数を更新
         driverStatus = newStatus;
 
-        // 2. GASへ信号を飛ばす（メッセージなしでアイコン色だけ即変え）
-        // broadcastEvent内で type: 'pickup' や 'end' として送信されます
+        // GASへ信号を飛ばす
         if (newStatus === "pickup") {
             await broadcastEvent('pickup'); 
         } else {
-            await broadcastEvent('end'); // 空車に戻る
+            await broadcastEvent('end'); 
         }
 
         console.log("迎車モード切替:", newStatus);
 
-        // 3. 自分のマーカーを即座に更新（黄色 #eab308 になる）
+        // 自分のマーカーを即座に更新
         if(userMarker){
             const icon = L.divIcon({
                 html: createMarkerHtml(userName, newStatus),
@@ -1423,23 +1419,23 @@ document.getElementById('btn-recenter').onclick = async () => {
             });
             userMarker.setIcon(icon);
         }
-    } else {
-        // シングルタップ時は通常のセンター移動（既存の処理があれば）
-        if (typeof moveToCurrentLocation === "function") moveToCurrentLocation();
+    } 
+    // 2. シングルタップ判定（現在地へ戻る）
+    else {
+        if (userMarker) {
+            const latlng = userMarker.getLatLng();
+            map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
+        } else {
+            if (typeof moveToCurrentLocation === "function") {
+                moveToCurrentLocation();
+            } else {
+                alert("現在地を取得中です...");
+            }
+        }
     }
 
     lastTap = now;
-};
-
-    // 既存の現在地戻る機能
-    if (userMarker) {
-        const latlng = userMarker.getLatLng();
-        map.flyTo(latlng, 16, { animate: true, duration: 0.5 });
-    } else {
-        alert("現在地を取得中です...");
-    }
-
-};
+}; // ここで全ての処理が正しく閉じられます
 
         // 紙吹雪を飛ばす関数
 function triggerConfetti() {
