@@ -54,24 +54,33 @@
         }
 
 
-/* 吹き出し演出用スタイル */
+/* 1. 吹き出し本体の設定 */
 .driver-bubble {
     position: absolute;
     bottom: 50px;
     left: 50%;
     transform: translateX(-50%);
     background: white;
-    padding: 6px 12px;
+    padding: 8px 12px;        /* 上下を少し広げました */
     border-radius: 15px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     font-size: 11px;
     font-weight: bold;
-    white-space: nowrap;
     z-index: 1000;
     pointer-events: none;
     border: 2px solid #3b82f6;
     animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    /* --- 改行と読みやすさの設定 --- */
+    white-space: pre-wrap;    /* 改行(\n)を有効にする */
+    word-wrap: break-word;    /* 長い単語を折り返す */
+    min-width: 100px;         /* 最低の幅 */
+    max-width: 200px;         /* 最大の幅 */
+    line-height: 1.4;         /* 行間 */
+    text-align: center;       /* 文字を中央寄せ */
 }
+
+/* 2. 吹き出しの「しっぽ」部分 */
 .driver-bubble::after {
     content: '';
     position: absolute;
@@ -82,6 +91,8 @@
     border-style: solid;
     border-color: white transparent transparent;
 }
+
+/* 3. アニメーション */
 @keyframes bounceIn {
     0% { transform: translateX(-50%) scale(0); opacity: 0; }
     100% { transform: translateX(-50%) scale(1); opacity: 1; }
@@ -1615,8 +1626,8 @@ function showMapPerformance(data) {
     bubble.innerText = data.message;
     marker.getElement().appendChild(bubble);
 
-    // 5秒後に消去
-    setTimeout(() => { if(bubble) bubble.remove(); }, 5000);
+    // 8秒後に消去
+    setTimeout(() => { if(bubble) bubble.remove(); }, 8000);
 
     // 高額キラキラ演出（3000円以上）
     if (data.amount >= 3000) {
@@ -1640,14 +1651,14 @@ async function broadcastEvent(type, amount = 0) {
     // --- ★ここで「自分の名札」もセットで更新する ---
     if (type === 'start') {
         driverStatus = "occupied"; // 実車
-        const startMsgs = [`${safeUserName}さんが実車になりました！`, `お、${safeUserName}さんがお客様を乗せました！` ];
+        const startMsgs = [`${safeUserName}さんが\n実車になりました！`, `お、${safeUserName}さんが\nお客様を乗せました！` ];
         msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
     } else if (type === 'end' || type === 'silent_end') {
         driverStatus = "vacant";   // 空車
         finalType = 'end';
         if (type === 'end' && amount > 0) {
-            msg = `${safeUserName}さんが到着しました！(¥${amount.toLocaleString()})`;
+            msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
         } else {
             msg = ""; // 0円やサイレントの時はメッセージなし
         }
