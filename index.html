@@ -1401,15 +1401,17 @@ document.getElementById('btn-recenter').onclick = async () => {
 
     // 1. ダブルタップ判定（迎車モード切替）
     if (now - lastTap < 300) {
-        // ステータスを反転
+        // ステータスを反転（pickup ↔ vacant）
         const newStatus = (driverStatus === "pickup") ? "vacant" : "pickup";
         driverStatus = newStatus;
 
         // GASへ信号を飛ばす
         if (newStatus === "pickup") {
+            // 迎車モードへ：メッセージなしで送信
             await broadcastEvent('pickup'); 
         } else {
-            await broadcastEvent('end'); 
+            // 空車モードへ：★メッセージを出さない専用の 'silent_end' を呼ぶ
+            await broadcastEvent('silent_end'); 
         }
 
         console.log("迎車モード切替:", newStatus);
@@ -1439,7 +1441,7 @@ document.getElementById('btn-recenter').onclick = async () => {
     }
 
     lastTap = now;
-}; // ここで全ての処理が正しく閉じられます
+};
 
         // 紙吹雪を飛ばす関数
 function triggerConfetti() {
@@ -1588,7 +1590,7 @@ function showMapPerformance(data) {
     }
 }
 
-// 3. イベントを送信する共通関数（修正版）
+// 3. イベントを送信する共通関数（メッセージ制御版）
 async function broadcastEvent(type, amount = 0) {
 
     if (!user || !user.uid) {
@@ -1599,9 +1601,10 @@ async function broadcastEvent(type, amount = 0) {
     const safeUserName = userName || "unknown";
 
     // =====================
-    // メッセージ生成（条件分岐を追加）
+    // メッセージ生成
     // =====================
-    let msg = ""; // 初期値は空
+    let msg = ""; 
+    let finalType = type;
 
     if (type === 'start') {
         const startMsgs = [
@@ -1612,6 +1615,7 @@ async function broadcastEvent(type, amount = 0) {
         msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
     } else if (type === 'end') {
+        // 通常の「到着ボタン」の時はメッセージを生成
         const endMsgs = [
             `${safeUserName}さんが到着しました！売上は ¥${amount.toLocaleString()} だったようです。`,
             `${safeUserName}さんが降車完了。ナイスドライブ！(¥${amount.toLocaleString()})`,
@@ -1620,33 +1624,34 @@ async function broadcastEvent(type, amount = 0) {
         msg = endMsgs[Math.floor(Math.random() * endMsgs.length)];
 
     } else if (type === 'pickup') {
-        // 迎車のときは msg = "" のままにする（メッセージなし）
+        // 迎車はメッセージなし
         msg = "";
+
+    } else if (type === 'silent_end') {
+        // ★新設：ダブルタップで「空車」に戻る時専用
+        msg = "";       // メッセージを空にする
+        finalType = 'end'; // GAS側には 'end' として送り、ステータスを vacant にさせる
     }
 
     // =====================
-    // GAS送信（CORS回避版）
+    // GAS送信
     // =====================
     try {
         await fetch(GAS_URL, {
             method: "POST",
             mode: "no-cors",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 mode: "event",
                 uid: user.uid,
                 userName: safeUserName,
-                type: type,      // ここが 'pickup', 'start', 'end' のいずれか
-                message: msg,   // pickupの時は空文字が飛ぶ
+                type: finalType,  // silent_end の場合はここで 'end' に変換されて飛ぶ
+                message: msg,     // 空文字が飛ぶので、0円獲得メッセージが出なくなる
                 amount: amount,
                 timestamp: Date.now()
             })
         });
-
-        console.log("イベント送信完了:", type);
-
+        console.log("イベント送信完了:", finalType);
     } catch (e) {
         console.error("イベント送信エラー:", e);
     }
