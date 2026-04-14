@@ -52,22 +52,30 @@
         .pip-hint {
             font-size: 8px; color: #94a3b8; text-align: center; margin-top: 4px;
         }
-/* パネル */
-#chatPanel {
-  position: fixed;
-  top: 0;
-  right: -90%;
-  width: 90%;
-  height: 100%;
-  background: #fff;
-  z-index: 10000;
-  transition: right 0.3s;
-  display: flex;
-  flex-direction: column;
+/* --- 新しいスライドチャット設定 --- */
+#chat-panel {
+    position: fixed;
+    top: 0;
+    right: -100%; /* 完全に隠す */
+    width: 85%;
+    max-width: 400px;
+    height: 100vh;
+    background: white;
+    z-index: 2000;
+    transition: right 0.3s ease-out; /* スムーズな動き */
+    box-shadow: -5px 0 15px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
 }
+#chat-panel.open { right: 0; } 
 
-#chatPanel.open {
-  right: 0;
+/* 流れる文字を読みやすくする枠 */
+.chat-msg-box {
+    background: #f0f2f5;
+    padding: 10px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid #ddd;
 }
 
 /* ヘッダー */
@@ -1671,84 +1679,97 @@ loadPrediction()
 },600000)
 
 
-//チャット機能
+// チャット機能
 let uid = localStorage.getItem("rideconnect_uid");
-        
 let lastCount = 0;
 
-// パネル開閉
-function toggleChat(){
-  document.getElementById("chatPanel").classList.toggle("open");
+// 【修正】パネル開閉（ID名を chat-panel に統一）
+function toggleChat() {
+  const panel = document.getElementById("chat-panel");
+  if (panel) {
+    panel.classList.toggle("open");
+  }
 }
 
-// 送信
-async function sendChat(){
-  const input = document.getElementById("chatInput");
+// 【修正】送信（送信後に閉じる機能を追加）
+async function sendChat() {
+  const input = document.getElementById("chat-input"); // ID名をHTMLと合わせる
   const text = input.value.trim();
-  if(!text) return;
+  if (!text) return;
 
   input.value = "";
+
+  // 送信したら即座にパネルを閉じて地図に戻る
+  toggleChat();
 
   await fetch(GAS_URL, {
     method: "POST",
     body: JSON.stringify({
       mode: "chat",
       text: text,
-      uid: uid,   // ←🔥これ追加（最重要）
+      uid: uid,
       time: Date.now()
     })
   });
+  
+  // 送信後に最新情報を取得
+  fetchChat();
 }
 
 // 取得
-async function fetchChat(){
+async function fetchChat() {
   const res = await fetch(GAS_URL + "?mode=chat");
   const data = await res.json();
 
-  if(!data) return;
+  if (!data || data.length === 0) return;
 
+  // 最初の読み込み時は全件表示、以降は新しいものだけ追加
   const newItems = data.slice(lastCount);
   lastCount = data.length;
 
   newItems.forEach(msg => {
     const time = new Date(msg.time);
-    const hh = String(time.getHours()).padStart(2,"0");
-    const mm = String(time.getMinutes()).padStart(2,"0");
+    const hh = String(time.getHours()).padStart(2, "0");
+    const mm = String(time.getMinutes()).padStart(2, "0");
 
     const name = msg.userName || "名無し";
 
-    addChat(name, `${hh}:${mm}`, msg.text);
+    addChat(name, `${hh}:${mm}`, msg.text, msg.uid === uid);
     spawnComment(`💬 ${name}: ${msg.text}`);
   });
 }
 
-// チャット欄に追加
-function addChat(name, time, text){
-  const list = document.getElementById("chatList");
+// 【修正】チャット欄に追加（読みやすさを劇的にアップ）
+function addChat(name, time, text, isMe) {
+  const list = document.getElementById("chat-list"); // ID名をHTMLと合わせる
+  if (!list) return;
 
   const div = document.createElement("div");
 
-  div.style.padding = "8px 10px";
-  div.style.marginBottom = "8px";
-  div.style.background = "#f1f5f9";
-  div.style.borderRadius = "10px";
+  // メッセージ全体のスタイル（自分の発言は右側に寄せる）
+  div.style.display = "flex";
+  div.style.flexDirection = "column";
+  div.style.alignItems = isMe ? "flex-end" : "flex-start";
+  div.style.marginBottom = "15px";
 
+  // 枠のデザイン（太字で見やすく、自分の発言は色を変える）
   div.innerHTML = `
-    <div style="
-      font-size:11px;
-      color:#64748b;
-      margin-bottom:2px;
-      display:flex;
-      justify-content:space-between;
-    ">
-      <span>${name}</span>
-      <span>${time}</span>
+    <div style="font-size:10px; color:#64748b; margin:0 5px 2px 5px;">
+      ${name} <span style="margin-left:5px;">${time}</span>
     </div>
     <div style="
-      font-size:14px;
-      color:#0f172a;
-      line-height:1.4;
-      word-break:break-word;
+      max-width: 85%;
+      padding: 10px 14px;
+      background: ${isMe ? "#dbeafe" : "#ffffff"};
+      color: #1e293b;
+      border-radius: 18px;
+      border-top-${isMe ? 'right' : 'left'}-radius: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      font-size: 15px;
+      font-weight: bold;
+      line-height: 1.4;
+      word-break: break-all;
+      border: 1px solid ${isMe ? "#bfdbfe" : "#e2e8f0"};
     ">
       ${text}
     </div>
@@ -1759,19 +1780,20 @@ function addChat(name, time, text){
 }
 
 // 流れるコメント
-function spawnComment(text){
+function spawnComment(text) {
+  const overlay = document.getElementById("chatOverlay");
+  if(!overlay) return;
+  
   const el = document.createElement("div");
   el.className = "comment";
   el.innerText = text;
-
   el.style.top = Math.random() * 80 + "%";
 
-  document.getElementById("chatOverlay").appendChild(el);
-
-  setTimeout(()=> el.remove(), 5000);
+  overlay.appendChild(el);
+  setTimeout(() => el.remove(), 5000);
 }
 
-// ポーリング
+// ポーリング（3秒ごとに更新）
 setInterval(fetchChat, 3000);
 
         async function loadPrediction() {
@@ -2248,23 +2270,32 @@ setInterval(renderCanvas, 100);
     
 
 
-<!-- チャットパネル -->
-<div id="chatPanel">
-  <div id="chatHeader">
-    <span>チャット</span>
-    <button onclick="toggleChat()">✖</button>
-  </div>
+<div id="chat-panel">
+    <div class="p-4 bg-blue-600 text-white flex justify-between items-center shadow-md">
+        <span class="font-bold"><i class="fas fa-comments mr-2"></i>チャット</span>
+        <button onclick="toggleChat()" class="text-2xl">&times;</button>
+    </div>
+    
+    <div id="chat-list" class="flex-1 overflow-y-auto p-4 bg-gray-50 space-y-3">
+        </div>
 
-  <div id="chatList"></div>
-
-  <div id="chatInputWrap">
-    <input id="chatInput" placeholder="メッセージ..." />
-    <button onclick="sendChat()">送信</button>
-  </div>
+    <div class="p-4 border-t bg-white">
+        <div class="flex gap-2">
+            <input type="text" id="chat-input" 
+                   class="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none" 
+                   placeholder="メッセージを入力...">
+            <button onclick="sendChat()" 
+                    class="bg-blue-600 text-white px-5 py-2 rounded-full font-bold shadow-sm">
+                送信
+            </button>
+        </div>
+    </div>
 </div>
 
-<!-- 流れるコメントレイヤー -->
-<div id="chatOverlay"></div>    
+<div id="chat-open-btn" onclick="toggleChat()" 
+     style="position:fixed; right:20px; bottom:130px; z-index:1500; width:60px; height:60px; background:#2563eb; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); cursor:pointer;">
+    <i class="fas fa-comments fa-lg"></i>
+</div>
 
 </body>
 </html>
