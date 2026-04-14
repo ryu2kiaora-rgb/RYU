@@ -1634,7 +1634,7 @@ loadPrediction()
 
 },600000)
 
-
+//チャット機能
         fetch(GAS_URL + "?mode=chat")
 
 let lastCount = 0;
@@ -2179,7 +2179,12 @@ setInterval(renderCanvas, 100);
 </script>
 <!-- チャットトグルボタン -->
 <button id="chatToggle"
-  style="position:fixed;top:20px;right:20px;z-index:10001;">
+  style="
+    position: fixed;
+    right: 20px;
+    bottom: 140px;  /* ←ここがポイント */
+    z-index: 10001;
+  ">
   💬
 </button>
 
