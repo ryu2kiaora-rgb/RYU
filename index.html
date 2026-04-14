@@ -113,31 +113,33 @@
   outline: none;
 }
 
-/* --- ニコニコ風流れるコメント（そのまま残す） --- */
+/* ニコニコ風コメントの土台 */
 #chatOverlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 100%;
-  pointer-events: none;
+  height: 80%; /* 操作の邪魔にならないよう少し短めに */
+  pointer-events: none; /* 下の地図を触れるようにする */
   z-index: 9999;
+  overflow: hidden;
 }
 
 .comment {
   position: absolute;
   left: 100%;
   white-space: nowrap;
-  font-size: 20px; /* 文字を少し大きく */
+  font-size: 22px; /* 運転中でも見えるサイズ */
   font-weight: bold;
-  color: #fff;
-  text-shadow: 2px 2px 4px #000; /* 縁取りを強くして見やすく */
-  animation: flow 5s linear forwards;
+  color: white;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.8), -1px -1px 0 #000;
+  animation: flow 5s linear forwards; /* 5秒かけて左へ */
 }
 
+/* 文字を右から左へ動かすアニメーション */
 @keyframes flow {
   from { transform: translateX(0); }
-  to { transform: translateX(-150vw); }
+  to { transform: translateX(-150vw); } /* 画面の左端まで出し切る */
 }
 
 /* 地図のボタンなどがチャットより上に来ないように調整 */
@@ -1692,24 +1694,18 @@ loadPrediction()
 let uid = localStorage.getItem("rideconnect_uid");
 let lastCount = 0;
 
-// 【修正】パネル開閉（ID名を chat-panel に統一）
 function toggleChat() {
   const panel = document.getElementById("chat-panel");
-  if (panel) {
-    panel.classList.toggle("open");
-  }
+  if (panel) panel.classList.toggle("open");
 }
 
-// 【修正】送信（送信後に閉じる機能を追加）
 async function sendChat() {
-  const input = document.getElementById("chat-input"); // ID名をHTMLと合わせる
+  const input = document.getElementById("chat-input");
   const text = input.value.trim();
   if (!text) return;
 
   input.value = "";
-
-  // 送信したら即座にパネルを閉じて地図に戻る
-  toggleChat();
+  toggleChat(); // 送信したら閉じる
 
   await fetch(GAS_URL, {
     method: "POST",
@@ -1720,19 +1716,14 @@ async function sendChat() {
       time: Date.now()
     })
   });
-  
-  // 送信後に最新情報を取得
   fetchChat();
 }
 
-// 取得
 async function fetchChat() {
   const res = await fetch(GAS_URL + "?mode=chat");
   const data = await res.json();
-
   if (!data || data.length === 0) return;
 
-  // 最初の読み込み時は全件表示、以降は新しいものだけ追加
   const newItems = data.slice(lastCount);
   lastCount = data.length;
 
@@ -1741,27 +1732,29 @@ async function fetchChat() {
     const hh = String(time.getHours()).padStart(2, "0");
     const mm = String(time.getMinutes()).padStart(2, "0");
 
-    const name = msg.userName || "名無し";
+    // 【修正】名前の取得をより確実に（userName または name）
+    const name = msg.userName || msg.name || "不明なドライバー";
 
-    addChat(name, `${hh}:${mm}`, msg.text, msg.uid === uid);
-    spawnComment(`💬 ${name}: ${msg.text}`);
+    // 自分の発言か判定（uidが一致するか）
+    addChat(name, `${hh}:${mm}`, msg.text, String(msg.uid) === String(uid));
+    
+    // 【修正】コメントを流す（少し遅延させて確実に実行）
+    setTimeout(() => {
+        spawnComment(`💬 ${name}: ${msg.text}`);
+    }, 100);
   });
 }
 
-// 【修正】チャット欄に追加（読みやすさを劇的にアップ）
 function addChat(name, time, text, isMe) {
-  const list = document.getElementById("chat-list"); // ID名をHTMLと合わせる
+  const list = document.getElementById("chat-list");
   if (!list) return;
 
   const div = document.createElement("div");
-
-  // メッセージ全体のスタイル（自分の発言は右側に寄せる）
   div.style.display = "flex";
   div.style.flexDirection = "column";
   div.style.alignItems = isMe ? "flex-end" : "flex-start";
   div.style.marginBottom = "15px";
 
-  // 枠のデザイン（太字で見やすく、自分の発言は色を変える）
   div.innerHTML = `
     <div style="font-size:10px; color:#64748b; margin:0 5px 2px 5px;">
       ${name} <span style="margin-left:5px;">${time}</span>
@@ -1783,26 +1776,26 @@ function addChat(name, time, text, isMe) {
       ${text}
     </div>
   `;
-
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }
 
-// 流れるコメント
 function spawnComment(text) {
   const overlay = document.getElementById("chatOverlay");
-  if(!overlay) return;
+  if (!overlay) return;
   
   const el = document.createElement("div");
   el.className = "comment";
   el.innerText = text;
-  el.style.top = Math.random() * 80 + "%";
+  // 地図の中央付近にバラけるように
+  el.style.top = (Math.random() * 50 + 10) + "%"; 
 
   overlay.appendChild(el);
+
+  // 5秒後に消去
   setTimeout(() => el.remove(), 5000);
 }
 
-// ポーリング（3秒ごとに更新）
 setInterval(fetchChat, 3000);
 
         async function loadPrediction() {
