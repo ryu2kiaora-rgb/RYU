@@ -459,6 +459,7 @@ const appId = 'rideshare-connect-pro';
 // ★★★ ここを一番上に明確に定義 ★★★
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzkqyeRKJ4RCDL5O3uXJQ9fHwsWkXpdo-W-gM6_PQZWLkv9ESbtjCkTm9gaMN-f-XZF8A/exec";
 
+        
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
@@ -1669,8 +1670,10 @@ loadPrediction()
 
 },600000)
 
+
 //チャット機能
- 
+let uid = localStorage.getItem("rideconnect_uid");
+        
 let lastCount = 0;
 
 // パネル開閉
@@ -1691,13 +1694,13 @@ async function sendChat(){
     body: JSON.stringify({
       mode: "chat",
       text: text,
-    userName: myName,   // ←追加（これ超重要）
+      uid: uid,   // ←🔥これ追加（最重要）
       time: Date.now()
     })
   });
 }
 
-// 取得（修正版）
+// 取得
 async function fetchChat(){
   const res = await fetch(GAS_URL + "?mode=chat");
   const data = await res.json();
@@ -1729,11 +1732,6 @@ function addChat(name, time, text){
   div.style.marginBottom = "8px";
   div.style.background = "#f1f5f9";
   div.style.borderRadius = "10px";
-
-  // 自分だけ色変える
-  if(name === myName){
-    div.style.background = "#dbeafe";
-  }
 
   div.innerHTML = `
     <div style="
