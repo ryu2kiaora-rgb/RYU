@@ -1691,6 +1691,7 @@ async function sendChat(){
     body: JSON.stringify({
       mode: "chat",
       text: text,
+    userName: myName,   // ←追加（これ超重要）
       time: Date.now()
     })
   });
@@ -1703,21 +1704,58 @@ async function fetchChat(){
 
   if(!data) return;
 
-  // 新着だけ流す
   const newItems = data.slice(lastCount);
   lastCount = data.length;
 
   newItems.forEach(msg => {
-    addChat(msg.text);
-    spawnComment(msg.text);
+    const time = new Date(msg.time);
+    const hh = String(time.getHours()).padStart(2,"0");
+    const mm = String(time.getMinutes()).padStart(2,"0");
+
+    const name = msg.userName || "名無し";
+
+    addChat(name, `${hh}:${mm}`, msg.text);
+    spawnComment(`💬 ${name}: ${msg.text}`);
   });
 }
 
 // チャット欄に追加
-function addChat(text){
+function addChat(name, time, text){
   const list = document.getElementById("chatList");
+
   const div = document.createElement("div");
-  div.innerText = text;
+
+  div.style.padding = "8px 10px";
+  div.style.marginBottom = "8px";
+  div.style.background = "#f1f5f9";
+  div.style.borderRadius = "10px";
+
+  // 自分だけ色変える
+  if(name === myName){
+    div.style.background = "#dbeafe";
+  }
+
+  div.innerHTML = `
+    <div style="
+      font-size:11px;
+      color:#64748b;
+      margin-bottom:2px;
+      display:flex;
+      justify-content:space-between;
+    ">
+      <span>${name}</span>
+      <span>${time}</span>
+    </div>
+    <div style="
+      font-size:14px;
+      color:#0f172a;
+      line-height:1.4;
+      word-break:break-word;
+    ">
+      ${text}
+    </div>
+  `;
+
   list.appendChild(div);
   list.scrollTop = list.scrollHeight;
 }
