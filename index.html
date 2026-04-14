@@ -1670,16 +1670,13 @@ loadPrediction()
 },600000)
 
 //チャット機能
-        fetch(GAS_URL + "?mode=chat")
-
+ 
 let lastCount = 0;
 
 // パネル開閉
 function toggleChat(){
   document.getElementById("chatPanel").classList.toggle("open");
 }
-
-document.getElementById("chatToggle").onclick = toggleChat;
 
 // 送信
 async function sendChat(){
@@ -1699,18 +1696,12 @@ async function sendChat(){
   });
 }
 
-// 取得
+// 取得（修正版）
 async function fetchChat(){
   const res = await fetch(GAS_URL + "?mode=chat");
   const data = await res.json();
 
   if(!data) return;
-
-  data.forEach(msg => {
-    addChat(msg.text);
-    spawnComment(msg.text);
-  });
-}
 
   // 新着だけ流す
   const newItems = data.slice(lastCount);
