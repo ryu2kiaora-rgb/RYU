@@ -1703,10 +1703,16 @@ async function sendChat(){
 
 // 取得
 async function fetchChat(){
-  const res = await fetch(GAS_URL);
+  const res = await fetch(GAS_URL + "?mode=chat");
   const data = await res.json();
 
   if(!data) return;
+
+  data.forEach(msg => {
+    addChat(msg.text);
+    spawnComment(msg.text);
+  });
+}
 
   // 新着だけ流す
   const newItems = data.slice(lastCount);
