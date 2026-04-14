@@ -596,39 +596,38 @@ function initMap() {
 
     // 最初はカラー
     normalLayer.addTo(map);
-
+    console.log("map OK");
+    
     // =====================
     // 💬 チャットボタン追加（ここに貼る）
     // =====================
     const ChatControl = L.Control.extend({
-        options: { position: "bottomright" },
+    options: { position: "bottomright" },
 
-        onAdd: function(map) {
-            const container = L.DomUtil.create("div", "leaflet-bar");
-            const btn = L.DomUtil.create("a", "", container);
+    onAdd: function(map) {
+        const container = L.DomUtil.create("div", "leaflet-bar");
+        const btn = L.DomUtil.create("a", "", container);
 
-            btn.innerHTML = '<i class="fas fa-comment"></i>';
-            btn.href = "#";
+        btn.innerHTML = "💬"; // ←ここ重要（まずはこれ）
+        btn.href = "#";
 
-            btn.style.width = "34px";
-            btn.style.height = "34px";
-            btn.style.lineHeight = "34px";
-            btn.style.textAlign = "center";
+        btn.style.width = "34px";
+        btn.style.height = "34px";
+        btn.style.lineHeight = "34px";
+        btn.style.textAlign = "center";
 
-            L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableClickPropagation(container);
 
-            btn.onclick = function(e){
-                e.preventDefault();
-                toggleChat();
-            };
+        btn.onclick = function(e){
+            e.preventDefault();
+            toggleChat();
+        };
 
-            return container;
-        }
-    });
+        return container;
+    }
+});
 
-    map.addControl(new ChatControl());
-
-}
+map.addControl(new ChatControl());
 
     //大宮カメラマーカー
 // 1. カメラアイコンの見た目を作成
