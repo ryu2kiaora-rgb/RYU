@@ -123,6 +123,11 @@
   from { transform: translateX(0); }
   to { transform: translateX(-120vw); }
 }
+        
+.leaflet-control-container {
+  z-index: 1000 !important;
+}
+        
 
 /* 1. 吹き出し本体の設定 */
 .driver-bubble {
@@ -2177,13 +2182,20 @@ setInterval(renderCanvas, 100);
 // ===== 大宮カメラ =====
 
 </script>
-<!-- チャットトグルボタン -->
+    
 <button id="chatToggle"
   style="
     position: fixed;
-    right: 20px;
-    bottom: 140px;  /* ←ここがポイント */
-    z-index: 10001;
+    right: 16px;
+    bottom: 160px; /* ←ここ重要 */
+    z-index: 10002;
+    pointer-events: auto;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #111;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   ">
   💬
 </button>
