@@ -1680,6 +1680,7 @@ loadPrediction()
 
 // チャット機能
 let uid = localStorage.getItem("rideconnect_uid");
+        let shownChatIds = {}; // ←ここ
         
 
 function toggleChat() {
@@ -1766,15 +1767,16 @@ function addChat(name, time, text, isMe) {
   list.scrollTop = list.scrollHeight;
 }
 
-        function renderChat(data) {
+function renderChat(data) {
 
   const list = document.getElementById("chat-list");
   if (!list) return;
 
-  // ★全部リセット（重要）
   list.innerHTML = "";
 
   data.forEach(msg => {
+
+    const id = msg.time + "_" + msg.uid;
 
     const time = new Date(msg.time);
     const hh = String(time.getHours()).padStart(2, "0");
@@ -1784,13 +1786,24 @@ function addChat(name, time, text, isMe) {
 
     addChat(name, `${hh}:${mm}`, msg.text, String(msg.uid) === String(uid));
 
-    setTimeout(() => {
-      spawnComment(`💬 ${name}: ${msg.text}`);
-    }, 100);
+    if (!shownChatIds[id]) {
+
+      setTimeout(() => {
+        spawnComment(`💬 ${name}: ${msg.text}`);
+      }, 100);
+
+      shownChatIds[id] = true;
+    }
+
   });
 
-  // ★スクロール最下部
   list.scrollTop = list.scrollHeight;
+
+  // ★ここ改善
+  const keys = Object.keys(shownChatIds);
+  if (keys.length > 50) {
+    delete shownChatIds[keys[0]];
+  }
 }
 
 function spawnComment(text) {
