@@ -1970,6 +1970,7 @@ setInterval(syncAll, 15000);
 
 // 1. 通知受信用リスナー（Firestoreを介して他者の動きを検知）
 let lastEventTime = Date.now();
+        let lastMoveTime = 0;
 
 // function listenToEvents() {
 
@@ -1996,19 +1997,39 @@ let lastEventTime = Date.now();
 
 // 2. 地図上での演出実行
 function showMapPerformance(data) {
+
+    // ★自分は除外
+    if (user && data.uid === user.uid) return;
+
+    // ★必要なイベントだけ（おすすめ）
+    if (data.type !== "start" && data.type !== "end") return;
+
+    // ★連続移動防止（5秒）
+    if (Date.now() - lastMoveTime < 5000) return;
+    lastMoveTime = Date.now();
+
     const marker = otherMarkers[data.uid];
     if (!marker) return;
 
-    // 吹き出しを表示
+    // ★ここ追加（カメラ移動）
+    if (map) {
+        map.setView(marker.getLatLng(), map.getZoom(), {
+            animate: true,
+            duration: 0.8
+        });
+    }
+
+    // 吹き出し
     const bubble = document.createElement('div');
     bubble.className = 'driver-bubble';
     bubble.innerText = data.message;
     marker.getElement().appendChild(bubble);
 
-    // 8秒後に消去
-    setTimeout(() => { if(bubble) bubble.remove(); }, 8000);
+    setTimeout(() => {
+        if (bubble) bubble.remove();
+    }, 8000);
 
-    // 高額キラキラ演出（3000円以上）
+    // 高額演出
     if (data.amount >= 3000) {
         confetti({
             particleCount: 150,
