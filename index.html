@@ -586,16 +586,17 @@ async function initApp() {
         loadSalesFromGAS();
 
         // ★ここに追加
-        document.getElementById('btn-edit-cancel').onclick = function() {
+        document.getElementById('btn-pay-cancel')
+.addEventListener('click', function() {
 
-            driverStatus = "vacant";
-            isDriving = false;
+    console.log("戻る押された");
 
-            broadcastEvent('silent_end');
-            sendLocationToGAS();
+    driverStatus = "vacant";
+    isDriving = false;
 
-            console.log("戻る：空車同期OK");
-        };
+    broadcastEvent('silent_end');
+    sendLocationToGAS();
+});
 
         document.getElementById('auth-loading-ui').classList.add('hidden');
 
