@@ -700,7 +700,7 @@ async function syncStatusToFirestore(force=false){
 
     if(!force && lastLat!==null && lastLng!==null){
         const distance = calcDistance(lastLat, lastLng, currentLat, currentLng);
-        if(distance < 80) return;
+        if(distance < 25) return;
     }
 
     const todayStr = getBusinessDate(new Date());
@@ -746,7 +746,7 @@ if(userMarker){
 
 watchId = navigator.geolocation.watchPosition((pos)=>{
 
-if(pos.coords.accuracy>120) return
+if(pos.coords.accuracy>200) return
 
 const lat = pos.coords.latitude
 const lng = pos.coords.longitude
@@ -800,7 +800,7 @@ function startSyncInterval(){
 
 if(syncInterval) clearInterval(syncInterval)
 
-const interval = isDriving ? 20000 : 180000
+const interval = isDriving ? 15000 : 180000
 
 syncInterval=setInterval(()=>{
 
