@@ -586,11 +586,11 @@ async function initApp() {
         initNumpad();
         //listenToSales();
         loadSalesFromGAS();
-        fetchDrivers();
+        // fetchDrivers();
 
-        if (!driverInterval) {
-            driverInterval = setInterval(fetchDrivers, 30000);
-        }
+// if (!driverInterval) {
+//     driverInterval = setInterval(fetchDrivers, 30000);
+// }
 
         document.getElementById('auth-loading-ui').classList.add('hidden');
 
@@ -992,7 +992,7 @@ async function fetchDrivers() {
     }
 
 }
-        setInterval(fetchDrivers,30000)
+       // setInterval(fetchDrivers,30000)
 
         function animateMarker(marker, start, end, duration = 30000) {
 
@@ -1699,7 +1699,7 @@ async function sendChat() {
       time: Date.now()
     })
   });
-  fetchChat();
+  // fetchChat();
 }
 
 async function fetchChat() {
@@ -1763,6 +1763,29 @@ function addChat(name, time, text, isMe) {
   list.scrollTop = list.scrollHeight;
 }
 
+        function renderChat(data) {
+
+  if (!data || data.length === 0) return;
+
+  const newItems = data.slice(lastCount);
+  lastCount = data.length;
+
+  newItems.forEach(msg => {
+
+    const time = new Date(msg.time);
+    const hh = String(time.getHours()).padStart(2, "0");
+    const mm = String(time.getMinutes()).padStart(2, "0");
+
+    const name = msg.userName || msg.name || "不明なドライバー";
+
+    addChat(name, `${hh}:${mm}`, msg.text, String(msg.uid) === String(uid));
+
+    setTimeout(() => {
+      spawnComment(`💬 ${name}: ${msg.text}`);
+    }, 100);
+  });
+}
+
 function spawnComment(text) {
   const overlay = document.getElementById("chatOverlay");
   if (!overlay) return;
@@ -1782,7 +1805,7 @@ function spawnComment(text) {
     if(el) el.remove();
   }, 6500);
 }
-setInterval(fetchChat, 15000);
+// setInterval(fetchChat, 15000);
 
         async function loadPrediction() {
 
@@ -1807,6 +1830,117 @@ setInterval(fetchChat, 15000);
   }).addTo(map);
 }
 
+
+        function updateDrivers(drivers) {
+
+    let totalOnline = 0;
+    const activeDrivers = {};
+
+    drivers.forEach(d => {
+
+        if (d.lat === undefined || d.lng === undefined) return;
+
+        activeDrivers[d.uid] = true;
+        totalOnline++;
+
+        if (user && d.uid === user.uid) return;
+        if (!map) return;
+
+        const icon = L.divIcon({
+            html: createMarkerHtml(d.name, d.status),
+            className: '',
+            iconSize: [0, 0]
+        });
+
+        const newPos = [d.lat, d.lng];
+
+        if (otherMarkers[d.uid]) {
+
+            const marker = otherMarkers[d.uid];
+            const prev = lastPositions[d.uid] || newPos;
+
+            marker.setIcon(icon);
+            animateMarker(marker, prev, newPos, 30000);
+
+        } else {
+
+            const marker = L.marker(newPos, { icon }).addTo(map);
+            otherMarkers[d.uid] = marker;
+
+        }
+
+        lastPositions[d.uid] = newPos;
+
+    });
+
+    Object.keys(otherMarkers).forEach(id => {
+
+        if (!activeDrivers[id]) {
+
+            if (map && otherMarkers[id]) {
+                map.removeLayer(otherMarkers[id]);
+            }
+
+            delete otherMarkers[id];
+            delete lastPositions[id];
+        }
+
+    });
+
+    const countEl = document.getElementById('online-count');
+    if (countEl) countEl.innerText = totalOnline;
+}
+
+        let lastSyncTime = 0;
+
+// =====================
+// SYNC
+// =====================
+let lastSyncTime = 0;
+let shownEvents = {};
+
+async function syncAll() {
+
+  try {
+
+    const res = await fetch(GAS_URL + "?mode=sync&since=" + lastSyncTime);
+    const data = await res.json();
+
+    // ===== drivers =====
+    if (data.drivers) {
+      updateDrivers(data.drivers);
+    }
+
+    // ===== chat =====
+    if (data.chat) {
+  renderChat(data.chat);
+}
+
+    // ===== events =====
+    if (data.events) {
+        data.events.forEach(ev => {
+
+            if (!user || ev.uid === user.uid) return;
+
+            if (shownEvents[ev.id]) return;
+            shownEvents[ev.id] = true;
+
+            showMapPerformance(ev);
+        });
+    }
+
+    // 時間更新
+    lastSyncTime = data.now;
+
+  } catch (e) {
+    console.error("sync error", e);
+  }
+}
+
+// 初回＋ループ
+syncAll();
+setInterval(syncAll, 15000);
+
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
 // ==========================================
@@ -1814,28 +1948,28 @@ setInterval(fetchChat, 15000);
 // 1. 通知受信用リスナー（Firestoreを介して他者の動きを検知）
 let lastEventTime = Date.now();
 
-function listenToEvents() {
+// function listenToEvents() {
 
-    setInterval(async () => {
+//     setInterval(async () => {
 
-        const res = await fetch(
-            GAS_URL + `?mode=events&since=${lastEventTime}`
-        );
+//         const res = await fetch(
+//             GAS_URL + `?mode=events&since=${lastEventTime}`
+//         );
 
-        const events = await res.json();
+//         const events = await res.json();
 
-        if (events.length > 0) {
+//         if (events.length > 0) {
 
-            events.forEach(ev => {
-                if (ev.uid === user.uid) return;
-                showMapPerformance(ev);
-            });
+//             events.forEach(ev => {
+//                 if (ev.uid === user.uid) return;
+//                 showMapPerformance(ev);
+//             });
 
-            lastEventTime = Date.now();
-        }
+//             lastEventTime = Date.now();
+//         }
 
-    }, 4000); // 4秒ごとにチェック
-}
+//     }, 4000);
+// }
 
 // 2. 地図上での演出実行
 function showMapPerformance(data) {
@@ -1945,7 +2079,7 @@ document.getElementById('btn-pay-submit').onclick = function(e) {
 
 // 5. 起動時にイベント監視を開始
 // initAppの中、またはその付近に追加
-setTimeout(listenToEvents, 5000);
+// setTimeout(listenToEvents, 5000);
         
         window.onload = initApp;
 
