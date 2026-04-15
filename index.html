@@ -130,22 +130,21 @@
 /* --- 流れる文字本体 --- */
 .comment {
   position: absolute;
-  left: 100%; /* 画面の右端の外側からスタート */
+  left: 100vw;
   white-space: nowrap;
-  font-size: 24px; /* 運転中でも見えるデカ文字 */
+  font-size: 24px;
   font-weight: bold;
   color: #ffffff;
-  /* どんな背景でも見えるように黒い縁取りを強力にする */
+
   text-shadow: 
     2px 2px 0 #000, -2px -2px 0 #000, 
     2px -2px 0 #000, -2px 2px 0 #000,
     0 2px 0 #000, 0 -2px 0 #000, 
     2px 0 0 #000, -2px 0 0 #000,
     3px 3px 5px rgba(0,0,0,0.8);
-  
-  /* アニメーションの設定：5秒かけて左へ、一定速度で、最後までやり切る */
-  animation: flowAnimation 6s linear forwards !important;
-  display: block !important;
+
+  /* ★ここ修正 */
+  animation: flowAnimation linear forwards;
 }
 
 /* --- 右から左へ流す命令 --- */
@@ -1681,7 +1680,7 @@ loadPrediction()
 
 // チャット機能
 let uid = localStorage.getItem("rideconnect_uid");
-let lastCount = 0;
+        
 
 function toggleChat() {
   const panel = document.getElementById("chat-panel");
@@ -1713,9 +1712,7 @@ async function fetchChat() {
   const data = await res.json();
   if (!data || data.length === 0) return;
 
-  const newItems = data.slice(lastCount);
-  lastCount = data.length;
-
+  
   newItems.forEach(msg => {
     const time = new Date(msg.time);
     const hh = String(time.getHours()).padStart(2, "0");
@@ -1771,12 +1768,13 @@ function addChat(name, time, text, isMe) {
 
         function renderChat(data) {
 
-  if (!data || data.length === 0) return;
+  const list = document.getElementById("chat-list");
+  if (!list) return;
 
-  const newItems = data.slice(lastCount);
-  lastCount = data.length;
+  // ★全部リセット（重要）
+  list.innerHTML = "";
 
-  newItems.forEach(msg => {
+  data.forEach(msg => {
 
     const time = new Date(msg.time);
     const hh = String(time.getHours()).padStart(2, "0");
@@ -1790,6 +1788,9 @@ function addChat(name, time, text, isMe) {
       spawnComment(`💬 ${name}: ${msg.text}`);
     }, 100);
   });
+
+  // ★スクロール最下部
+  list.scrollTop = list.scrollHeight;
 }
 
 function spawnComment(text) {
@@ -1797,19 +1798,23 @@ function spawnComment(text) {
   if (!overlay) return;
   
   const el = document.createElement("div");
-  el.className = "comment"; // CSSのクラス名と一致させる
+  el.className = "comment";
   el.innerText = text;
   
-  // 重ならないように高さをランダムにする（画面の10%〜60%の間）
+  // ランダム高さ
   const randomTop = Math.floor(Math.random() * 50) + 10;
   el.style.top = randomTop + "%"; 
 
+  // ★文字数で速度調整（ここが重要）
+  const duration = Math.max(6, text.length * 0.3);
+  el.style.animationDuration = duration + "s";
+
   overlay.appendChild(el);
 
-  // 6秒後（アニメーション終了後）に要素を消してブラウザを軽くする
+  // ★アニメ終了に合わせて削除
   setTimeout(() => {
-    if(el) el.remove();
-  }, 6500);
+    if (el) el.remove();
+  }, duration * 1000 + 500);
 }
 // setInterval(fetchChat, 15000);
 
