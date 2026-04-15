@@ -579,18 +579,23 @@ async function initApp() {
 
         user = u;
 
-        // UID保存
         localStorage.setItem("rideconnect_uid", u.uid);
 
         initMap();
         initNumpad();
-        //listenToSales();
         loadSalesFromGAS();
-        // fetchDrivers();
 
-// if (!driverInterval) {
-//     driverInterval = setInterval(fetchDrivers, 30000);
-// }
+        // ★ここに追加
+        document.getElementById('btn-edit-cancel').onclick = function() {
+
+            driverStatus = "vacant";
+            isDriving = false;
+
+            broadcastEvent('silent_end');
+            sendLocationToGAS();
+
+            console.log("戻る：空車同期OK");
+        };
 
         document.getElementById('auth-loading-ui').classList.add('hidden');
 
