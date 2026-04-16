@@ -1282,13 +1282,13 @@ logId:editingLogId
         try {
             const docRef = await db.collection(path).add(data);
             
-            // データ保存成功時に紙吹雪を実行
-            triggerConfetti();
-            
-            // Google Apps Scriptへの送信
-            sendToGAS(data, docRef.id);
+            // ★イベントとして統一
+broadcastEvent('end', amount);
 
-// ★追加
+// Google Apps Scriptへの送信
+sendToGAS(data, docRef.id);
+
+// 売上更新
 setTimeout(() => {
     loadSalesFromGAS();
 }, 500);
