@@ -950,15 +950,30 @@ async function fetchDrivers() {
                 iconSize: [0, 0]
             });
 
+            const ANIM_TIME = 12000; // 15秒同期に最適
+
             const newPos = [d.lat, d.lng];
 
             if (otherMarkers[d.uid]) {
 
                 const marker = otherMarkers[d.uid];
-                const prev = lastPositions[d.uid] || newPos;
+
+                // 前回位置（なければ現在位置）
+                const prevRaw = lastPositions[d.uid] || marker.getLatLng();
+                const prev = Array.isArray(prevRaw)
+                    ? prevRaw
+                    : [prevRaw.lat, prevRaw.lng];
 
                 marker.setIcon(icon);
-                animateMarker(marker, prev, newPos, 14000);
+
+                // 距離チェック（微ブレ防止）
+                const distance = map.distance(prev, newPos);
+
+                if (distance < 3) {
+                    marker.setLatLng(newPos);
+                } else {
+                    animateMarker(marker, prev, newPos, ANIM_TIME);
+                }
 
             } else {
 
@@ -967,11 +982,12 @@ async function fetchDrivers() {
 
             }
 
+            // ★必ず最後に保存
             lastPositions[d.uid] = newPos;
 
         });
 
-        // 消えたドライバー削除
+        // ★ここ重要（forEachの外！）
         Object.keys(otherMarkers).forEach(id => {
 
             if (!activeDrivers[id]) {
@@ -986,7 +1002,7 @@ async function fetchDrivers() {
 
         });
 
-        // オンライン数
+        // オンライン数表示
         const countEl = document.getElementById('online-count');
         if (countEl) countEl.innerText = totalOnline;
 
@@ -995,11 +1011,23 @@ async function fetchDrivers() {
         console.error("driver read error", e);
 
     }
-
 }
-       // setInterval(fetchDrivers,30000)
 
-        function animateMarker(marker, start, end, duration = 30000) {
+
+// =====================
+// アニメーション
+// =====================
+function animateMarker(marker, start, end, duration = 12000) {
+
+    // ★前のアニメを止める（超重要）
+    if (marker._animFrame) {
+        cancelAnimationFrame(marker._animFrame);
+    }
+
+    const startLat = start[0];
+    const startLng = start[1];
+    const endLat = end[0];
+    const endLng = end[1];
 
     const startTime = Date.now();
 
@@ -1015,12 +1043,17 @@ async function fetchDrivers() {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
-        const lat = start[0] + (end[0] - start[0]) * progress;
-        const lng = start[1] + (end[1] - start[1]) * progress;
+        // ★イージング（滑らかにする）
+        const eased = progress * (2 - progress);
+
+        const lat = startLat + (endLat - startLat) * eased;
+        const lng = startLng + (endLng - startLng) * eased;
 
         marker.setLatLng([lat, lng]);
 
-        if (progress < 1) requestAnimationFrame(animate);
+        if (progress < 1) {
+            marker._animFrame = requestAnimationFrame(animate);
+        }
     }
 
     animate();
