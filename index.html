@@ -1976,7 +1976,7 @@ async function syncAll() {
     if (data.events) {
         data.events.forEach(ev => {
 
-            if (!user || ev.uid === user.uid) return;
+            if (!user) return;
 
             if (shownEvents[ev.id]) return;
             shownEvents[ev.id] = true;
