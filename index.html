@@ -776,7 +776,16 @@ syncStatusToFirestore(true)
 
 }else{
 
-userMarker.setLatLng([lat,lng])
+  userMarker.setLatLng([lat,lng])
+
+  const latlng = L.latLng(lat, lng)
+
+  if (!map.getBounds().contains(latlng)) {
+    map.panTo(latlng, {
+      animate: true,
+      duration: 0.5
+    })
+  }
 
 }
 
