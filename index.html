@@ -2171,30 +2171,30 @@ async function broadcastEvent(type, amount = 0) {
 
     let msg = ""; 
     let finalType = type;
+    
+// --- ★ここで「自分の名札」もセットで更新する ---
+if (type === 'start') {
+    driverStatus = "occupied"; // 実車
+    const startMsgs = [`${safeUserName}さんが\n実車になりました！`, `お、${safeUserName}さんが\nお客様を乗せました！` ];
+    msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
-    // --- ★ここで「自分の名札」もセットで更新する ---
-    if (type === 'start') {
-        driverStatus = "occupied"; // 実車
-        const startMsgs = [`${safeUserName}さんが\n実車になりました！`, `お、${safeUserName}さんが\nお客様を乗せました！` ];
-        msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
+} else if (type === 'end' || type === 'silent_end') {
+    driverStatus = "vacant";   // 空車
+    finalType = 'end';
+    if (type === 'end' && amount > 0) {
+        msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
 
-    } else if (type === 'end' || type === 'silent_end') {
-        driverStatus = "vacant";   // 空車
-        finalType = 'end';
-        if (type === 'end' && amount > 0) {
-            msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
-
-            // ★ここに1行追加！これで到着した瞬間に紙吹雪が舞います
+        // ★紙吹雪を呼ぶ（カッコやセミコロンの閉じ忘れに注意！）
         triggerConfetti();
             
-        } else {
-            msg = ""; // 0円やサイレントの時はメッセージなし
-        }
-
-    } else if (type === 'pickup') {
-        driverStatus = "pickup";   // 迎車
-        msg = ""; // 迎車はメッセージなし（出すならここに入れる）
+    } else {
+        msg = ""; // 0円やサイレントの時はメッセージなし
     }
+
+} else if (type === 'pickup') {
+    driverStatus = "pickup";   // 迎車
+    msg = ""; 
+}
 
     // GAS送信処理（以下略）
     try {
