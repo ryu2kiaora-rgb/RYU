@@ -1024,13 +1024,35 @@ async function fetchDrivers() {
 
 
 // =====================
-// アニメーション
+// 設定
 // =====================
-function animateMarker(marker, start, end, duration = 12000) {
+const UPDATE_INTERVAL = 15000; // 位置更新間隔（15秒）
+const WARP_DISTANCE = 0.001;   // 約100m以上はワープ
 
-    // ★前のアニメを止める（超重要）
+// =====================
+// 距離チェック
+// =====================
+function getDistance(start, end) {
+    const dx = start[0] - end[0];
+    const dy = start[1] - end[1];
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+// =====================
+// アニメーション（完成版）
+// =====================
+function animateMarker(marker, start, end) {
+
+    // ★前のアニメを止める
     if (marker._animFrame) {
         cancelAnimationFrame(marker._animFrame);
+    }
+
+    // ★距離が大きすぎる場合はワープ（GPSズレ対策）
+    const distance = getDistance(start, end);
+    if (distance > WARP_DISTANCE) {
+        marker.setLatLng(end);
+        return;
     }
 
     const startLat = start[0];
@@ -1038,22 +1060,35 @@ function animateMarker(marker, start, end, duration = 12000) {
     const endLat = end[0];
     const endLng = end[1];
 
+    // ★更新タイミングに合わせたduration
+    const duration = UPDATE_INTERVAL - 500;
+
     const startTime = Date.now();
 
+    // =====================
+    // 向き（回転）
+    // =====================
     const angle = getBearing(start, end);
 
     if (marker._icon) {
+        marker._icon.style.transition = "transform 0.5s ease-out";
         marker._icon.style.transformOrigin = "center";
         marker._icon.style.transform = `rotate(${angle}deg)`;
     }
 
+    // =====================
+    // アニメ本体
+    // =====================
     function animate() {
 
-        const elapsed = Date.now() - startTime;
+        const now = Date.now();
+        const elapsed = now - startTime;
         const progress = Math.min(elapsed / duration, 1);
 
-        // ★イージング（滑らかにする）
-        const eased = progress * (2 - progress);
+        // ★軽いイージング（自然さ＋ジャンプ防止のバランス）
+        const eased = progress < 0.5
+            ? 2 * progress * progress
+            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
 
         const lat = startLat + (endLat - startLat) * eased;
         const lng = startLng + (endLng - startLng) * eased;
@@ -1068,6 +1103,9 @@ function animateMarker(marker, start, end, duration = 12000) {
     animate();
 }
 
+// =====================
+// 方角計算
+// =====================
 function getBearing(start, end) {
 
     const lat1 = start[0] * Math.PI / 180;
@@ -1083,7 +1121,6 @@ function getBearing(start, end) {
 
     return (brng + 360) % 360;
 }
-
         function updateSalesUI() {
     const now = new Date();
     const range = getPeriodRange(now, closingDay);
@@ -1897,7 +1934,7 @@ function spawnComment(text) {
 }
 
 
-        function updateDrivers(drivers) {
+function updateDrivers(drivers) {
 
     let totalOnline = 0;
     const activeDrivers = {};
@@ -1912,33 +1949,77 @@ function spawnComment(text) {
         if (user && d.uid === user.uid) return;
         if (!map) return;
 
-        const icon = L.divIcon({
-            html: createMarkerHtml(d.name, d.status),
-            className: '',
-            iconSize: [0, 0]
-        });
-
         const newPos = [d.lat, d.lng];
 
+        // =====================
+        // 既存マーカー
+        // =====================
         if (otherMarkers[d.uid]) {
 
             const marker = otherMarkers[d.uid];
-            const prev = lastPositions[d.uid] || newPos;
 
-            marker.setIcon(icon);
-            animateMarker(marker, prev, newPos, 30000);
+            // ★前回位置（なければ現在位置）
+            let prev = lastPositions[d.uid];
 
-        } else {
+            if (!prev) {
+                prev = newPos;
+                marker.setLatLng(newPos);
+            }
+
+            // ★距離チェック（遠すぎたらリセット）
+            const distance = getDistance(prev, newPos);
+            if (distance > 0.001) {
+                marker.setLatLng(newPos);
+                lastPositions[d.uid] = newPos;
+                return;
+            }
+
+            // ★アイコンは変化があるときだけ
+            if (marker._status !== d.status || marker._name !== d.name) {
+
+                const icon = L.divIcon({
+                    html: createMarkerHtml(d.name, d.status),
+                    className: '',
+                    iconSize: [0, 0]
+                });
+
+                marker.setIcon(icon);
+                marker._status = d.status;
+                marker._name = d.name;
+            }
+
+            // ★アニメーション（durationは渡さない！）
+            animateMarker(marker, prev, newPos);
+
+        } 
+        
+        // =====================
+        // 新規マーカー
+        // =====================
+        else {
+
+            const icon = L.divIcon({
+                html: createMarkerHtml(d.name, d.status),
+                className: '',
+                iconSize: [0, 0]
+            });
 
             const marker = L.marker(newPos, { icon }).addTo(map);
-            otherMarkers[d.uid] = marker;
 
+            marker._status = d.status;
+            marker._name = d.name;
+
+            otherMarkers[d.uid] = marker;
         }
 
+        // ★位置保存（最後にやるのが重要）
         lastPositions[d.uid] = newPos;
 
     });
 
+    // =====================
+    // 消えたユーザー削除
+    // =====================
     Object.keys(otherMarkers).forEach(id => {
 
         if (!activeDrivers[id]) {
@@ -1952,6 +2033,7 @@ function spawnComment(text) {
         }
 
     });
+}
 
     const countEl = document.getElementById('online-count');
     if (countEl) countEl.innerText = totalOnline;
@@ -2101,6 +2183,10 @@ async function broadcastEvent(type, amount = 0) {
         finalType = 'end';
         if (type === 'end' && amount > 0) {
             msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
+
+            // ★ここに1行追加！これで到着した瞬間に紙吹雪が舞います
+        triggerConfetti();
+            
         } else {
             msg = ""; // 0円やサイレントの時はメッセージなし
         }
@@ -2321,7 +2407,7 @@ async function fetchRankingWithDelay() {
 }
 
 // --- 2. 描画エンジン (スライド機能付き) ---
-function renderCanvas() {
+function () {
     if (!ctx) return;
     const isPiP = !!document.pictureInPictureElement;
 
@@ -2468,7 +2554,7 @@ setupPiP();
 canvas.addEventListener('click', togglePiP);
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-setInterval(renderCanvas, 100); 
+setInterval(, 100); 
 </script>
 
 <script>
