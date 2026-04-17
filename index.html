@@ -633,6 +633,19 @@ function initMap() {
 
     normalLayer.addTo(map);
 
+// ★ここに追加
+map.on('movestart', () => {
+
+  isUserInteracting = true;
+
+  if (interactTimer) clearTimeout(interactTimer);
+
+  interactTimer = setTimeout(() => {
+    isUserInteracting = false;
+  }, 30000);
+
+});
+
 
 
     // =====================
@@ -788,14 +801,17 @@ syncStatusToFirestore(true)
 
   userMarker.setLatLng([lat,lng])
 
-  const latlng = L.latLng(lat, lng)
+const latlng = L.latLng(lat, lng)
 
-  if (!map.getBounds().contains(latlng)) {
-    map.panTo(latlng, {
-      animate: true,
-      duration: 0.5
-    })
-  }
+if (
+  !isUserInteracting &&
+  !map.getBounds().contains(latlng)
+) {
+  map.panTo(latlng, {
+    animate: true,
+    duration: 0.5
+  })
+}
 
 }
 
@@ -2133,6 +2149,8 @@ let lastEventTime = Date.now();
 // グローバル（上の方に1回だけ）
 let isWatchingEvent = false;
 let returnTimer = null;
+        let isUserInteracting = false;
+let interactTimer = null;
 
 // 2. 地図上での演出実行
 function showMapPerformance(data) {
