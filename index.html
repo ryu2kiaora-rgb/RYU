@@ -2122,9 +2122,9 @@ let lastEventTime = Date.now();
 // 2. 地図上での演出実行
 function showMapPerformance(data) {
 
-    // ★自分は除外
+  
     // ★自分除外しない（演出は全員対象）
-if (data.type !== "start" && data.type !== "end") return;
+
 
     // ★必要なイベントだけ（おすすめ）
     if (data.type !== "start" && data.type !== "end") return;
