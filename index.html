@@ -2119,14 +2119,14 @@ let lastEventTime = Date.now();
 //     }, 4000);
 // }
 
+// グローバル（上の方に1回だけ）
+let isWatchingEvent = false;
+let returnTimer = null;
+
 // 2. 地図上での演出実行
 function showMapPerformance(data) {
 
-    // ★自分は除外
-    // ★自分除外しない（演出は全員対象）
-if (data.type !== "start" && data.type !== "end") return;
-
-    // ★必要なイベントだけ（おすすめ）
+    // ★必要なイベントだけ
     if (data.type !== "start" && data.type !== "end") return;
 
     // ★連続移動防止（5秒）
@@ -2136,7 +2136,17 @@ if (data.type !== "start" && data.type !== "end") return;
     const marker = otherMarkers[data.uid];
     if (!marker) return;
 
-    // ★ここ追加（カメラ移動）
+    // =========================
+    // ★カメラ制御ここから
+    // =========================
+
+    // ★既存の戻りタイマーをキャンセル
+    if (returnTimer) clearTimeout(returnTimer);
+
+    // ★イベント視聴モードON
+    isWatchingEvent = true;
+
+    // ★他人の位置へ移動
     if (map) {
         map.setView(marker.getLatLng(), map.getZoom(), {
             animate: true,
@@ -2144,28 +2154,50 @@ if (data.type !== "start" && data.type !== "end") return;
         });
     }
 
+    // ★6秒後に自分へ戻る
+    returnTimer = setTimeout(() => {
+
+        isWatchingEvent = false;
+
+        if (map && currentLat && currentLng) {
+            map.flyTo([currentLat, currentLng], map.getZoom(), {
+                animate: true,
+                duration: 1.5
+            });
+        }
+
+    }, 6000);
+
+    // =========================
+    // ★カメラ制御ここまで
+    // =========================
+
+
     // 吹き出し
     const bubble = document.createElement('div');
     bubble.className = 'driver-bubble';
     bubble.innerText = data.message;
-    marker.getElement().appendChild(bubble);
+
+    const el = marker.getElement();
+    if (el) el.appendChild(bubble);
 
     setTimeout(() => {
         if (bubble) bubble.remove();
     }, 8000);
 
+
     // ★紙吹雪（全員共通発火）
-if (data.type === "end" && data.amount > 0) {
+    if (data.type === "end" && data.amount > 0) {
 
-    // ★連続防止
-    if (!window._lastConfettiTime) window._lastConfettiTime = 0;
-    if (Date.now() - window._lastConfettiTime < 5000) return;
+        // ★連続防止
+        if (!window._lastConfettiTime) window._lastConfettiTime = 0;
+        if (Date.now() - window._lastConfettiTime < 5000) return;
 
-    window._lastConfettiTime = Date.now();
+        window._lastConfettiTime = Date.now();
 
-    triggerConfetti(); // ←ここに集約
-}
+        triggerConfetti();
     }
+}
 
 // 3. イベントを送信する共通関数（メッセージ制御版）
 async function broadcastEvent(type, amount = 0) {
