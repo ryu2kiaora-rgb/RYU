@@ -2144,18 +2144,10 @@ if (data.type !== "start" && data.type !== "end") return;
         });
     }
 
-    // 吹き出し
-    const bubble = document.createElement('div');
-    bubble.className = 'driver-bubble';
-    bubble.innerText = data.message;
-    marker.getElement().appendChild(bubble);
+if (data.type === "end") {
 
-    setTimeout(() => {
-        if (bubble) bubble.remove();
-    }, 8000);
-
-    // ★紙吹雪（全員共通発火）
-if (data.type === "end" && data.amount > 0) {
+    // ★金額チェック（あとで戻す）
+    if (data.amount && data.amount <= 0) return;
 
     // ★連続防止
     if (!window._lastConfettiTime) window._lastConfettiTime = 0;
@@ -2163,7 +2155,7 @@ if (data.type === "end" && data.amount > 0) {
 
     window._lastConfettiTime = Date.now();
 
-    triggerConfetti(); // ←ここに集約
+    triggerConfetti();
 }
     }
 
