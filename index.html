@@ -2407,7 +2407,7 @@ async function fetchRankingWithDelay() {
 }
 
 // --- 2. 描画エンジン (スライド機能付き) ---
-function () {
+function renderCanvas() {
     if (!ctx) return;
     const isPiP = !!document.pictureInPictureElement;
 
