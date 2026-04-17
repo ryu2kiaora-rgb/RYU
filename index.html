@@ -759,6 +759,15 @@ sendLocationToGAS()
 
 if(!map) return
 
+// ★イベント中はカメラ操作を完全停止
+if(isWatchingEvent){
+    // 位置更新だけする
+    if(userMarker){
+        userMarker.setLatLng([lat,lng])
+    }
+    return
+}
+
 if(!userMarker){
 
 userMarker = L.marker([lat,lng],{
@@ -769,6 +778,7 @@ iconSize:[0,0]
 })
 }).addTo(map)
 
+// ★通常時だけ自分に移動
 map.setView([lat,lng],16)
 
 // Firestore同期（残しているなら）
@@ -798,6 +808,7 @@ enableHighAccuracy:true,
 maximumAge:15000,
 timeout:20000
 })
+}
 
 // ★ 30秒ごとに強制同期（GPS止まったとき対策）
 startSyncInterval()
