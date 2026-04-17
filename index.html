@@ -2123,7 +2123,8 @@ let lastEventTime = Date.now();
 function showMapPerformance(data) {
 
     // ★自分は除外
-    if (user && data.uid === user.uid) return;
+    // ★自分除外しない（演出は全員対象）
+if (data.type !== "start" && data.type !== "end") return;
 
     // ★必要なイベントだけ（おすすめ）
     if (data.type !== "start" && data.type !== "end") return;
@@ -2153,15 +2154,16 @@ function showMapPerformance(data) {
         if (bubble) bubble.remove();
     }, 8000);
 
-    // 高額演出
-    if (data.amount >= 3000) {
-        confetti({
-            particleCount: 150,
-            spread: 70,
-            origin: { y: 0.6 },
-            colors: ['#FFD700', '#FFA500', '#FF4500']
-        });
-    }
+    // ★紙吹雪（全員共通発火）
+if (data.type === "end" && data.amount > 0) {
+
+    // ★連続防止
+    if (!window._lastConfettiTime) window._lastConfettiTime = 0;
+    if (Date.now() - window._lastConfettiTime < 5000) return;
+
+    window._lastConfettiTime = Date.now();
+
+    triggerConfetti(); // ←ここに集約
 }
 
 // 3. イベントを送信する共通関数（メッセージ制御版）
@@ -2183,10 +2185,7 @@ if (type === 'start') {
     finalType = 'end';
     if (type === 'end' && amount > 0) {
         msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
-
-        // ★紙吹雪を呼ぶ（カッコやセミコロンの閉じ忘れに注意！）
-        triggerConfetti();
-            
+                    
     } else {
         msg = ""; // 0円やサイレントの時はメッセージなし
     }
