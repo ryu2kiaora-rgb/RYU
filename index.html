@@ -2186,6 +2186,8 @@ if (type === 'start') {
     finalType = 'end';
     if (type === 'end' && amount > 0) {
         msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
+
+         triggerConfetti(); 
                     
     } else {
         msg = ""; // 0円やサイレントの時はメッセージなし
