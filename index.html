@@ -2554,7 +2554,7 @@ setupPiP();
 canvas.addEventListener('click', togglePiP);
 fetchRankingWithDelay();
 setInterval(fetchRankingWithDelay, PIP_CONFIG.updateInterval);
-setInterval(, 100); 
+setInterval(renderCanvas, 100); 
 </script>
 
 <script>
