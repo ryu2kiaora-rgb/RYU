@@ -1235,7 +1235,7 @@ function getBearing(start, end) {
         }
 
         // Event Handlers
-        document.getElementById('btn-edit-save').onclick = async () => {
+       document.getElementById('btn-edit-save').onclick = async () => {
 
     const btn = document.getElementById('btn-edit-save')
 
@@ -1249,12 +1249,13 @@ function getBearing(start, end) {
 
     if (path && editingLogId) {
 
-        showEditLoading()      // ← ★追加
-        btn.disabled = true    // ← ★追加
+        showEditLoading()
+        btn.disabled = true
 
         const start = Date.now()
 
         try{
+            // Firestore更新
             await db.doc(`${path}/${editingLogId}`).update({ 
                 timeStr: time,
                 amount,
@@ -1266,7 +1267,37 @@ function getBearing(start, end) {
                 lng: sPos.lng
             });
 
-            // 成功したら閉じる
+            // 🔥 時刻ミリ秒生成
+            const log = salesLogs.find(l => l.id === editingLogId);
+            const base = new Date(log.pickupTime);
+
+            const [h, m] = time.split(":").map(Number);
+            base.setHours(h);
+            base.setMinutes(m);
+            base.setSeconds(0);
+            base.setMilliseconds(0);
+
+            const pickupTimeMs = base.getTime();
+
+            // 🔥 GAS更新
+            await fetch(GAS_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    mode: "update",
+                    logId: editingLogId,
+                    pickupLat: sPos.lat,
+                    pickupLng: sPos.lng,
+                    dropLat: ePos.lat,
+                    dropLng: ePos.lng,
+                    pickupTime: pickupTimeMs,
+                    amount: amount
+                })
+            });
+
+            // 🔥 再取得
+            await loadSalesFromGAS();
+
+            // 閉じる
             setTimeout(()=>{
                 document.getElementById("modal-edit-log").classList.add("hidden")
             },300)
@@ -1281,47 +1312,12 @@ function getBearing(start, end) {
             const wait = Math.max(400 - diff, 0)
 
             setTimeout(()=>{
-                hideEditLoading()   // ← ★追加
+                hideEditLoading()
                 btn.disabled = false
             }, wait)
         }
     }
 }
-// 🔥 元ログの日付を使ってミリ秒生成（安全版）
-const log = salesLogs.find(l => l.id === editingLogId);
-
-// ★ 既存のpickupTimeをベースにする（これが重要）
-const base = new Date(log.pickupTime);
-
-const [h, m] = time.split(":").map(Number);
-
-// 時刻だけ上書き
-base.setHours(h);
-base.setMinutes(m);
-base.setSeconds(0);
-base.setMilliseconds(0);
-
-const pickupTimeMs = base.getTime();
-
-                
-                // 🔥 GASにも更新を送る
-await fetch(GAS_URL, {
-  method: "POST",
-  body: JSON.stringify({
-    mode: "update",
-    logId: editingLogId,
-    pickupLat: sPos.lat,
-    pickupLng: sPos.lng,
-    dropLat: ePos.lat,
-    dropLng: ePos.lng,
-    pickupTime: pickupTimeMs,
-    amount: amount
-  })
-});
-                await loadSalesFromGAS();
-            }
-            document.getElementById('modal-edit-log').classList.add('hidden');
-        };
 
         document.getElementById('btn-edit-delete').onclick = async () => {
 
