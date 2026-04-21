@@ -1238,16 +1238,18 @@ function getBearing(start, end) {
 // 🔥 元ログの日付を使ってミリ秒生成（安全版）
 const log = salesLogs.find(l => l.id === editingLogId);
 
-const baseDate = new Date(log.dateStr);
+// ★ 既存のpickupTimeをベースにする（これが重要）
+const base = new Date(log.pickupTime);
+
 const [h, m] = time.split(":").map(Number);
 
-const pickupTimeMs = new Date(
-  baseDate.getFullYear(),
-  baseDate.getMonth(),
-  baseDate.getDate(),
-  h,
-  m
-).getTime();
+// 時刻だけ上書き
+base.setHours(h);
+base.setMinutes(m);
+base.setSeconds(0);
+base.setMilliseconds(0);
+
+const pickupTimeMs = base.getTime();
 
                 
                 // 🔥 GASにも更新を送る
