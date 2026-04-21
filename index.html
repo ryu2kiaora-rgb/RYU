@@ -505,7 +505,7 @@ const db = firebase.firestore();
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let isShiftActive = true;   // ★これ追加（重要）
 let syncInterval = null;    // ★これもここでOK（整理）
-        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
+        let map, editMap, userMarker, otherMarkers = {}, watchId, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
