@@ -2429,14 +2429,14 @@ async function fetchRankingWithDelay() {
 
             // --- ここでGASからのデータを整理 ---
             const drivers = rawData.map(d => ({
-                id: d.driverId,
-                name: d.userName,
-                total: d.amount,      // GASで合計済み
-                count: d.count || 1,  // GASから届く件数を使う
-                avg: Math.floor(d.amount / (d.count || 1)),
-                max: d.max || d.amount,
-                isMe: d.driverId === (typeof user !== 'undefined' ? user?.uid : null)
-            }));
+  id: d.driverId,
+  name: d.userName,
+  total: d.amount,
+  count: d.count || 0,
+  avg: d.count ? Math.floor(d.amount / d.count) : 0,
+  max: d.maxPrice || 0,
+  isMe: d.driverId === (typeof user !== 'undefined' ? user?.uid : null)
+}));
 
             // 4つのランキングを作成
             const createList = (sortKey) => [...drivers].sort((a,b) => b[sortKey] - a[sortKey]);
