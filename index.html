@@ -2153,17 +2153,28 @@ function updateDrivers(drivers) {
 
 
 // =====================
-// SYNC
+// SYNC（完全安定版）
 // =====================
 let lastSyncTime = 0;
 let shownEvents = {};
+let syncInterval = null;
 
 async function syncAll() {
-    if (!isShiftActive) return;
+  if (!isShiftActive) {
+    console.log("SYNC skipped (inactive)");
+    return;
+  }
+
+  console.log("SYNC tick:", new Date().toISOString());
 
   try {
-
     const res = await fetch(GAS_URL + "?mode=sync&since=" + lastSyncTime);
+
+    if (!res.ok) {
+      console.error("HTTP error:", res.status);
+      return;
+    }
+
     const data = await res.json();
 
     // ===== drivers =====
@@ -2173,33 +2184,44 @@ async function syncAll() {
 
     // ===== chat =====
     if (data.chat) {
-  renderChat(data.chat);
-}
-
-    // ===== events =====
-    if (data.events) {
-        data.events.forEach(ev => {
-
-            if (!user) return;
-
-            if (shownEvents[ev.id]) return;
-            shownEvents[ev.id] = true;
-
-            showMapPerformance(ev);
-        });
+      renderChat(data.chat);
     }
 
-    // 時間更新
-    lastSyncTime = data.now;
+    // ===== events =====
+    if (data.events && user) {
+      data.events.forEach(ev => {
+        if (shownEvents[ev.id]) return;
+        shownEvents[ev.id] = true;
+        showMapPerformance(ev);
+      });
+    }
+
+    // ===== sync time =====
+    if (data.now) {
+      lastSyncTime = data.now;
+    }
 
   } catch (e) {
-    console.error("sync error", e);
+    console.error("SYNC ERROR:", e);
   }
 }
 
-// 初回＋ループ
-syncAll();
-syncInterval = setInterval(syncAll, 15000);
+// =====================
+// START LOOP
+// =====================
+function startSync() {
+  if (syncInterval) clearInterval(syncInterval);
+
+  syncAll(); // 即時1回
+
+  syncInterval = setInterval(() => {
+    console.log("interval alive");
+    syncAll();
+  }, 15000);
+}
+
+// 起動
+startSync();
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
