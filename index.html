@@ -503,6 +503,8 @@ const db = firebase.firestore();
 
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
+        let isShiftActive = true;   // ★これ追加（重要）
+let syncInterval = null;    // ★これもここでOK（整理）
         let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
@@ -2156,6 +2158,7 @@ let lastSyncTime = 0;
 let shownEvents = {};
 
 async function syncAll() {
+    if (!isShiftActive) return;
 
   try {
 
@@ -2195,7 +2198,7 @@ async function syncAll() {
 
 // 初回＋ループ
 syncAll();
-setInterval(syncAll, 15000);
+syncInterval = setInterval(syncAll, 15000);
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
@@ -2416,6 +2419,7 @@ document.getElementById('btn-pay-submit').onclick = function(e) {
 document.getElementById('header-btn-end-shift').onclick = async () => {
 
     if (!confirm('シフトを終了しますか？')) return;
+    isShiftActive = false;
 
     // 1 状態
     isDriving = false;
