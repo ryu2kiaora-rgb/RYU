@@ -503,6 +503,7 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
         // State
+        let isShiftActive = false;
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
@@ -1376,11 +1377,21 @@ document.getElementById('btn-edit-cancel').onclick = () => {
     document.getElementById('modal-edit-log').classList.add('hidden');
 };
 
-document.getElementById('btn-start-shift').onclick = () => {
+document.getElementById('btn-start-shift').onclick = async () => {
+
+    isShiftActive = true; // ★これ追加（超重要）
+
     document.getElementById('shift-overlay').classList.add('hidden');
     document.getElementById('driver-controls').classList.remove('hidden');
     document.getElementById('header-btn-end-shift').classList.remove('hidden');
+
     startGPS();
+
+    // ★ここでオンライン登録
+    await syncStatusToFirestore();
+    await sendLocationToGAS();
+
+    console.log("シフト開始＝オンライン");
 };
 
         document.getElementById('btn-ride-on').onclick = () => {
@@ -2158,35 +2169,31 @@ let shownEvents = {};
 
 async function syncAll() {
 
+  if (!isShiftActive) return; // ★最重要
+
   try {
 
     const res = await fetch(GAS_URL + "?mode=sync&since=" + lastSyncTime);
     const data = await res.json();
 
-    // ===== drivers =====
     if (data.drivers) {
       updateDrivers(data.drivers);
     }
 
-    // ===== chat =====
     if (data.chat) {
-  renderChat(data.chat);
-}
-
-    // ===== events =====
-    if (data.events) {
-        data.events.forEach(ev => {
-
-            if (!user) return;
-
-            if (shownEvents[ev.id]) return;
-            shownEvents[ev.id] = true;
-
-            showMapPerformance(ev);
-        });
+      renderChat(data.chat);
     }
 
-    // 時間更新
+    if (data.events) {
+      data.events.forEach(ev => {
+        if (!user) return;
+        if (shownEvents[ev.id]) return;
+
+        shownEvents[ev.id] = true;
+        showMapPerformance(ev);
+      });
+    }
+
     lastSyncTime = data.now;
 
   } catch (e) {
@@ -2194,9 +2201,12 @@ async function syncAll() {
   }
 }
 
-// 初回＋ループ
-syncAll();
-setInterval(syncAll, 15000);
+// ★シフト中だけ動く
+setInterval(() => {
+  if (isShiftActive) {
+    syncAll();
+  }
+}, 15000);
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
@@ -2419,6 +2429,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     if (!confirm('シフトを終了しますか？')) return;
 
     isDriving = false;
+    isShiftActive = false; // ★これ必須
 
     if (syncInterval) {
         clearInterval(syncInterval);
