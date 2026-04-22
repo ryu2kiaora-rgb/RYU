@@ -506,6 +506,7 @@ const db = firebase.firestore();
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let isShiftActive = true;   // ★これ追加（重要）
 let syncInterval = null;    // ★これもここでOK（整理）
+        let syncStarted = false;
         let map, editMap, userMarker, otherMarkers = {}, watchId, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
@@ -593,6 +594,7 @@ async function initApp() {
         initMap();
         initNumpad();
         loadSalesFromGAS();
+        startSync(); // ← これ追加
 
         // ★ここに追加
         document.getElementById('btn-pay-cancel')
@@ -2209,18 +2211,23 @@ async function syncAll() {
 // START LOOP
 // =====================
 function startSync() {
-  if (syncInterval) clearInterval(syncInterval);
 
-  syncAll(); // 即時1回
+  if (syncStarted) {
+    console.log("SYNC already started");
+    return;
+  }
+
+  syncStarted = true;
+
+  console.log("SYNC INIT");
+
+  syncAll();
 
   syncInterval = setInterval(() => {
     console.log("interval alive");
     syncAll();
   }, 15000);
 }
-
-// 起動
-startSync();
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
