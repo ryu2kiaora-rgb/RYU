@@ -2418,55 +2418,30 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
 
     if (!confirm('シフトを終了しますか？')) return;
 
-    // 1 状態
     isDriving = false;
 
-    // 2 同期停止
-    if(syncInterval){
+    if (syncInterval) {
         clearInterval(syncInterval);
         syncInterval = null;
     }
 
-    if(watchId){
+    if (watchId) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
     }
 
-    // 3 Firestore削除
-    if(user){
-        try{
+    // Firestore削除だけやる（必要なら）
+    if (user) {
+        try {
             await db.doc(`${getPublicPath('drivers')}/${user.uid}`).delete();
-            console.log("ドライバー削除完了");
-        }catch(e){
-            console.log("削除エラー", e);
+        } catch (e) {
+            console.log(e);
         }
     }
 
-    // 4 自分マーカー削除
-    if(userMarker){
-        map.removeLayer(userMarker);
-        userMarker = null;
-    }
-
-    // 5 他ドライバー削除
-    Object.keys(otherMarkers).forEach(id=>{
-        map.removeLayer(otherMarkers[id]);
-    });
-
-    otherMarkers = {};
-
-    // 6 位置リセット
-    currentLat = null;
-    currentLng = null;
-    lastLat = null;
-    lastLng = null;
-
-    // 7 オンライン人数リセット
-    document.getElementById("online-count").innerText = "0";
-
-    // 8 overlay表示
-    document.getElementById("shift-overlay").style.display = "flex";
-
+    setTimeout(() => {
+        location.reload();
+    }, 200);
 };
         
     </script>
