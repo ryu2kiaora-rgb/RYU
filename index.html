@@ -2322,14 +2322,14 @@ async function broadcastEvent(type, amount = 0) {
 // --- ★ここで「自分の名札」もセットで更新する ---
 if (type === 'start') {
     driverStatus = "occupied"; // 実車
-    const startMsgs = [`${safeUserName}さんが\n実車になりました！`, `お、${safeUserName}さんが\nお客様を乗せました！` ];
+    const startMsgs = [`${safeUserName}さんが実車になりました！`, `お、${safeUserName}さんがお客様を乗せました！` ];
     msg = startMsgs[Math.floor(Math.random() * startMsgs.length)];
 
 } else if (type === 'end' || type === 'silent_end') {
     driverStatus = "vacant";   // 空車
     finalType = 'end';
     if (type === 'end' && amount > 0) {
-        msg = `${safeUserName}さんが\n到着しました！\n(¥${amount.toLocaleString()})`;
+        msg = `${safeUserName}さんが到着しました！\n(¥${amount.toLocaleString()})`;
 
          triggerConfetti(); 
                     
