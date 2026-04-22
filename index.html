@@ -2151,52 +2151,106 @@ function updateDrivers(drivers) {
 
 
 // =====================
-// SYNC
+// SYNC SYSTEM (FINAL)
 // =====================
+
 let lastSyncTime = 0;
 let shownEvents = {};
 
+// ★重要：シフト制御
+let isShiftActive = false;
+let syncInterval = null;
+
+
+// =====================
+// SYNC MAIN
+// =====================
 async function syncAll() {
 
-  try {
+    // ★シフト中じゃないなら完全停止
+    if (!isShiftActive) return;
 
-    const res = await fetch(GAS_URL + "?mode=sync&since=" + lastSyncTime);
-    const data = await res.json();
+    try {
 
-    // ===== drivers =====
-    if (data.drivers) {
-      updateDrivers(data.drivers);
+        const res = await fetch(
+            GAS_URL + "?mode=sync&since=" + lastSyncTime,
+            { cache: "no-store" } // ★iOS対策
+        );
+
+        const data = await res.json();
+
+        // ===== drivers =====
+        if (data.drivers) {
+            updateDrivers(data.drivers);
+        }
+
+        // ===== chat =====
+        if (data.chat) {
+            renderChat(data.chat);
+        }
+
+        // ===== events =====
+        if (data.events && user) {
+
+            data.events.forEach(ev => {
+
+                if (shownEvents[ev.id]) return;
+                shownEvents[ev.id] = true;
+
+                showMapPerformance(ev);
+            });
+        }
+
+        // 時刻更新
+        lastSyncTime = data.now;
+
+    } catch (e) {
+        console.error("sync error", e);
     }
-
-    // ===== chat =====
-    if (data.chat) {
-  renderChat(data.chat);
 }
 
-    // ===== events =====
-    if (data.events) {
-        data.events.forEach(ev => {
 
-            if (!user) return;
+// =====================
+// START SYNC (シフト開始)
+// =====================
+function startSync() {
 
-            if (shownEvents[ev.id]) return;
-            shownEvents[ev.id] = true;
+    if (syncInterval) return; // 二重防止
 
-            showMapPerformance(ev);
-        });
-    }
+    isShiftActive = true;
 
-    // 時間更新
-    lastSyncTime = data.now;
+    // 即1回実行
+    syncAll();
 
-  } catch (e) {
-    console.error("sync error", e);
-  }
+    // ループ開始
+    syncInterval = setInterval(() => {
+        syncAll();
+    }, 15000);
 }
 
-// 初回＋ループ
-syncAll();
-setInterval(syncAll, 15000);
+
+// =====================
+// STOP SYNC (シフト終了)
+// =====================
+function stopSync() {
+
+    isShiftActive = false;
+
+    if (syncInterval) {
+        clearInterval(syncInterval);
+        syncInterval = null;
+    }
+
+    // 状態リセット
+    lastSyncTime = 0;
+    shownEvents = {};
+}
+
+
+// =====================
+// 初期状態（重要）
+// =====================
+// ★ここでは絶対にsyncしない
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
