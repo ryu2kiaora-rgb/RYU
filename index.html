@@ -434,8 +434,7 @@ window.addEventListener('resize', () => {
     <div id="modal-edit-log" class="hidden fixed inset-0 bg-black/60 z-[4000] flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-6 w-full max-w-md max-h-[95vh] overflow-y-auto relative">
             <!-- ★ ローディング（追加） -->
-<div id="edit-loading"
-     class="hidden absolute inset-0 bg-white/70 z-[5000] flex items-center justify-center rounded-3xl">
+<div id="edit-loading" class="hidden absolute inset-0 bg-white/70 z-50 flex items-center justify-center rounded-3xl">
     <div class="flex flex-col items-center gap-2">
         <div class="w-10 h-10 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
         <p class="text-sm font-bold text-gray-600">更新中...</p>
@@ -502,19 +501,9 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-        // ★ Service Worker 強制削除（これが一番上）
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(reg => reg.unregister());
-  });
-}
-
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
-        let isShiftActive = true;   // ★これ追加（重要）
-let syncInterval = null;    // ★これもここでOK（整理）
-        let syncStarted = false;
-        let map, editMap, userMarker, otherMarkers = {}, watchId, timerInterval, rideStartTimestamp;
+        let map, editMap, userMarker, otherMarkers = {}, watchId, syncInterval, timerInterval, rideStartTimestamp;
         let lastLat = null, lastLng = null;
         let startPos = null, endPos = null; 
         let isDriving = false, currentInputAmount = "", salesLogs = [], currentViewDate = new Date(), selectedDateStr = getBusinessDate(new Date());
@@ -601,16 +590,6 @@ async function initApp() {
         initMap();
         initNumpad();
         loadSalesFromGAS();
-        startSync(); // ← これ追加
-
-        // ★ Service Worker 念押し削除
-window.addEventListener('load', () => {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(reg => reg.unregister());
-    });
-  }
-});
 
         // ★ここに追加
         document.getElementById('btn-pay-cancel')
@@ -2171,27 +2150,16 @@ function updateDrivers(drivers) {
 
 
 // =====================
-// SYNC（完全安定版）
+// SYNC
 // =====================
 let lastSyncTime = 0;
 let shownEvents = {};
 
 async function syncAll() {
-  if (!isShiftActive) {
-    console.log("SYNC skipped (inactive)");
-    return;
-  }
-
-  console.log("SYNC tick:", new Date().toISOString());
 
   try {
+
     const res = await fetch(GAS_URL + "?mode=sync&since=" + lastSyncTime);
-
-    if (!res.ok) {
-      console.error("HTTP error:", res.status);
-      return;
-    }
-
     const data = await res.json();
 
     // ===== drivers =====
@@ -2201,49 +2169,33 @@ async function syncAll() {
 
     // ===== chat =====
     if (data.chat) {
-      renderChat(data.chat);
-    }
+  renderChat(data.chat);
+}
 
     // ===== events =====
-    if (data.events && user) {
-      data.events.forEach(ev => {
-        if (shownEvents[ev.id]) return;
-        shownEvents[ev.id] = true;
-        showMapPerformance(ev);
-      });
+    if (data.events) {
+        data.events.forEach(ev => {
+
+            if (!user) return;
+
+            if (shownEvents[ev.id]) return;
+            shownEvents[ev.id] = true;
+
+            showMapPerformance(ev);
+        });
     }
 
-    // ===== sync time =====
-    if (data.now) {
-      lastSyncTime = data.now;
-    }
+    // 時間更新
+    lastSyncTime = data.now;
 
   } catch (e) {
-    console.error("SYNC ERROR:", e);
+    console.error("sync error", e);
   }
 }
 
-// =====================
-// START LOOP
-// =====================
-function startSync() {
-
-  if (syncStarted) {
-    console.log("SYNC already started");
-    return;
-  }
-
-  syncStarted = true;
-
-  console.log("SYNC INIT");
-
-  syncAll();
-
-  syncInterval = setInterval(() => {
-    console.log("interval alive");
-    syncAll();
-  }, 15000);
-}
+// 初回＋ループ
+syncAll();
+setInterval(syncAll, 15000);
 
         // ==========================================
 // ライドシェコネクト演出拡張：FCM連携 & 地図演出
@@ -2464,7 +2416,6 @@ document.getElementById('btn-pay-submit').onclick = function(e) {
 document.getElementById('header-btn-end-shift').onclick = async () => {
 
     if (!confirm('シフトを終了しますか？')) return;
-    isShiftActive = false;
 
     // 1 状態
     isDriving = false;
