@@ -603,6 +603,15 @@ async function initApp() {
         loadSalesFromGAS();
         startSync(); // ← これ追加
 
+        // ★ Service Worker 念押し削除
+window.addEventListener('load', () => {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
+  }
+});
+
         // ★ここに追加
         document.getElementById('btn-pay-cancel')
 .addEventListener('click', function() {
