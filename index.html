@@ -857,20 +857,23 @@ syncStatusToFirestore()
 
 }
 
-function sendLocationToGAS() {
-    // 1. 準備ができていなければ何もしない
-    if (!user || !user.uid || currentLat === null) return;
+function sendLocationToGAS(forceOffline = false) {
 
-    // 2. 今の自分の状態を確認する
-    let statusToSend = driverStatus; 
-    
-    // 3. もし「実車中」なら、強制的に occupied（赤）にする
-    if (isDriving) statusToSend = "occupied";
-    
-    // 4. もし「on」や「空車」という古い名前だったら vacant（青）に直す
-    if (statusToSend === "on" || statusToSend === "vacant") statusToSend = "vacant";
+    if (!user || !user.uid) return;
 
-    // 5. GASに最新の情報を届ける
+    // ★ここが重要（位置なしでも送れるようにする）
+    if (!forceOffline && currentLat === null) return;
+
+    let statusToSend = driverStatus;
+
+    if (forceOffline) {
+        statusToSend = "offline";
+    } else if (isDriving) {
+        statusToSend = "occupied";
+    } else {
+        statusToSend = "vacant";
+    }
+
     fetch(GAS_URL, {
         method: "POST",
         mode: "no-cors",
@@ -880,7 +883,7 @@ function sendLocationToGAS() {
             name: userName,
             lat: currentLat,
             lng: currentLng,
-            status: statusToSend // これでGAS側の「色塗り」と名前が一致します
+            status: statusToSend
         })
     });
 }
@@ -2452,6 +2455,7 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
             console.log(e);
         }
     }
+    sendLocationToGAS(true);
 
     setTimeout(() => {
         location.reload();
