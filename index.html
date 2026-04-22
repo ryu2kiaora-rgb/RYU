@@ -986,11 +986,14 @@ async function fetchDrivers() {
         const activeDrivers = {};
 
         drivers.forEach(d => {
+            if (d.status === "offline") return;
 
             if (d.lat === undefined || d.lng === undefined) return;
 
-            activeDrivers[d.uid] = true;
-            totalOnline++;
+            if (d.status === "online") {
+    activeDrivers[d.uid] = true;
+    totalOnline++;
+}
 
             // 自分は表示しない
             if (user && d.uid === user.uid) return;
