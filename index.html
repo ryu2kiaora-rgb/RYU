@@ -989,18 +989,33 @@ async function fetchDrivers() {
         const activeDrivers = {};
 
         drivers.forEach(d => {
-            if (d.status === "offline") return;
 
-            if (d.lat === undefined || d.lng === undefined) return;
+            // =========================
+            // ① OFFLINE処理（重要）
+            // =========================
+            if (d.status === "offline") {
 
-            if (d.status === "online") {
-    activeDrivers[d.uid] = true;
-    totalOnline++;
-}
+                if (otherMarkers[d.uid]) {
+                    map.removeLayer(otherMarkers[d.uid]);
+                    delete otherMarkers[d.uid];
+                    delete lastPositions[d.uid];
+                }
 
-            // 自分は表示しない
+                return;
+            }
+
+            // =========================
+            // ② 座標チェック
+            // =========================
+            if (d.lat == null || d.lng == null) return;
+
+            // =========================
+            // ③ ONLINE扱い
+            // =========================
+            activeDrivers[d.uid] = true;
+            totalOnline++;
+
             if (user && d.uid === user.uid) return;
-
             if (!map) return;
 
             const icon = L.divIcon({
@@ -1009,15 +1024,13 @@ async function fetchDrivers() {
                 iconSize: [0, 0]
             });
 
-            const ANIM_TIME = 12000; // 15秒同期に最適
-
+            const ANIM_TIME = 12000;
             const newPos = [d.lat, d.lng];
 
             if (otherMarkers[d.uid]) {
 
                 const marker = otherMarkers[d.uid];
 
-                // 前回位置（なければ現在位置）
                 const prevRaw = lastPositions[d.uid] || marker.getLatLng();
                 const prev = Array.isArray(prevRaw)
                     ? prevRaw
@@ -1025,7 +1038,6 @@ async function fetchDrivers() {
 
                 marker.setIcon(icon);
 
-                // 距離チェック（微ブレ防止）
                 const distance = map.distance(prev, newPos);
 
                 if (distance < 3) {
@@ -1038,37 +1050,33 @@ async function fetchDrivers() {
 
                 const marker = L.marker(newPos, { icon }).addTo(map);
                 otherMarkers[d.uid] = marker;
-
             }
 
-            // ★必ず最後に保存
             lastPositions[d.uid] = newPos;
-
         });
 
-        // ★ここ重要（forEachの外！）
+        // =========================
+        // ④ 存在しないドライバー削除
+        // =========================
         Object.keys(otherMarkers).forEach(id => {
 
             if (!activeDrivers[id]) {
 
-                if (map && otherMarkers[id]) {
-                    map.removeLayer(otherMarkers[id]);
-                }
+                map.removeLayer(otherMarkers[id]);
 
                 delete otherMarkers[id];
                 delete lastPositions[id];
             }
-
         });
 
-        // オンライン数表示
+        // =========================
+        // ⑤ UI更新
+        // =========================
         const countEl = document.getElementById('online-count');
         if (countEl) countEl.innerText = totalOnline;
 
     } catch (e) {
-
         console.error("driver read error", e);
-
     }
 }
 
