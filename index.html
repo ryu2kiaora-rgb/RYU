@@ -502,6 +502,13 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+        // ★ Service Worker 強制削除（これが一番上）
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
+  });
+}
+
         // State
         let user = null, userName = localStorage.getItem('ride_userName'), closingDay = parseInt(localStorage.getItem('ride_closingDay')) || 31;
         let isShiftActive = true;   // ★これ追加（重要）
