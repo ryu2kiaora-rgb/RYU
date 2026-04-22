@@ -857,23 +857,20 @@ syncStatusToFirestore()
 
 }
 
-function sendLocationToGAS(forceOffline = false) {
+function sendLocationToGAS() {
+    // 1. 準備ができていなければ何もしない
+    if (!user || !user.uid || currentLat === null) return;
 
-    if (!user || !user.uid) return;
+    // 2. 今の自分の状態を確認する
+    let statusToSend = driverStatus; 
+    
+    // 3. もし「実車中」なら、強制的に occupied（赤）にする
+    if (isDriving) statusToSend = "occupied";
+    
+    // 4. もし「on」や「空車」という古い名前だったら vacant（青）に直す
+    if (statusToSend === "on" || statusToSend === "vacant") statusToSend = "vacant";
 
-    // ★ここが重要（位置なしでも送れるようにする）
-    if (!forceOffline && currentLat === null) return;
-
-    let statusToSend = driverStatus;
-
-    if (forceOffline) {
-        statusToSend = "offline";
-    } else if (isDriving) {
-        statusToSend = "occupied";
-    } else {
-        statusToSend = "vacant";
-    }
-
+    // 5. GASに最新の情報を届ける
     fetch(GAS_URL, {
         method: "POST",
         mode: "no-cors",
@@ -883,7 +880,7 @@ function sendLocationToGAS(forceOffline = false) {
             name: userName,
             lat: currentLat,
             lng: currentLng,
-            status: statusToSend
+            status: statusToSend // これでGAS側の「色塗り」と名前が一致します
         })
     });
 }
@@ -990,32 +987,14 @@ async function fetchDrivers() {
 
         drivers.forEach(d => {
 
-            // =========================
-            // ① OFFLINE処理（重要）
-            // =========================
-            if (d.status === "offline") {
+            if (d.lat === undefined || d.lng === undefined) return;
 
-                if (otherMarkers[d.uid]) {
-                    map.removeLayer(otherMarkers[d.uid]);
-                    delete otherMarkers[d.uid];
-                    delete lastPositions[d.uid];
-                }
-
-                return;
-            }
-
-            // =========================
-            // ② 座標チェック
-            // =========================
-            if (d.lat == null || d.lng == null) return;
-
-            // =========================
-            // ③ ONLINE扱い
-            // =========================
             activeDrivers[d.uid] = true;
             totalOnline++;
 
+            // 自分は表示しない
             if (user && d.uid === user.uid) return;
+
             if (!map) return;
 
             const icon = L.divIcon({
@@ -1024,13 +1003,15 @@ async function fetchDrivers() {
                 iconSize: [0, 0]
             });
 
-            const ANIM_TIME = 12000;
+            const ANIM_TIME = 12000; // 15秒同期に最適
+
             const newPos = [d.lat, d.lng];
 
             if (otherMarkers[d.uid]) {
 
                 const marker = otherMarkers[d.uid];
 
+                // 前回位置（なければ現在位置）
                 const prevRaw = lastPositions[d.uid] || marker.getLatLng();
                 const prev = Array.isArray(prevRaw)
                     ? prevRaw
@@ -1038,6 +1019,7 @@ async function fetchDrivers() {
 
                 marker.setIcon(icon);
 
+                // 距離チェック（微ブレ防止）
                 const distance = map.distance(prev, newPos);
 
                 if (distance < 3) {
@@ -1050,33 +1032,37 @@ async function fetchDrivers() {
 
                 const marker = L.marker(newPos, { icon }).addTo(map);
                 otherMarkers[d.uid] = marker;
+
             }
 
+            // ★必ず最後に保存
             lastPositions[d.uid] = newPos;
+
         });
 
-        // =========================
-        // ④ 存在しないドライバー削除
-        // =========================
+        // ★ここ重要（forEachの外！）
         Object.keys(otherMarkers).forEach(id => {
 
             if (!activeDrivers[id]) {
 
-                map.removeLayer(otherMarkers[id]);
+                if (map && otherMarkers[id]) {
+                    map.removeLayer(otherMarkers[id]);
+                }
 
                 delete otherMarkers[id];
                 delete lastPositions[id];
             }
+
         });
 
-        // =========================
-        // ⑤ UI更新
-        // =========================
+        // オンライン数表示
         const countEl = document.getElementById('online-count');
         if (countEl) countEl.innerText = totalOnline;
 
     } catch (e) {
+
         console.error("driver read error", e);
+
     }
 }
 
@@ -2445,11 +2431,6 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     isDriving = false;
     isShiftActive = false; // ★これ必須
 
-    driverStatus = "offline"; // ★これ必須
-    // ★これ追加（重要）
-currentLat = null;
-currentLng = null;
-
     if (syncInterval) {
         clearInterval(syncInterval);
         syncInterval = null;
@@ -2468,7 +2449,6 @@ currentLng = null;
             console.log(e);
         }
     }
-    sendLocationToGAS(true);
 
     setTimeout(() => {
         location.reload();
