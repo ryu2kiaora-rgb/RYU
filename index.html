@@ -2437,6 +2437,8 @@ document.getElementById('header-btn-end-shift').onclick = async () => {
     isDriving = false;
     isShiftActive = false; // ★これ必須
 
+    driverStatus = "offline"; // ★これ必須
+
     if (syncInterval) {
         clearInterval(syncInterval);
         syncInterval = null;
