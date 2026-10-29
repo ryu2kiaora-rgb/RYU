@@ -6,6 +6,7 @@
     <title>RideShare Connect Pro - Saving Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
     <style>
         #map { height: calc(100vh - 128px); width: 100%; }
@@ -477,6 +478,8 @@ window.addEventListener('resize', () => {
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
     <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
@@ -628,16 +631,21 @@ async function initApp() {
 function initMap() {
     if (map) return;
 
-    map = L.map('map', { zoomControl: false, attributionControl: false })
+    // 既存のLeaflet地図・マーカー・ルート機能は維持
+    // OpenFreeMapのベクター地図をLeaflet内に表示するため、MapLibre連携を使用
+    map = L.map('map', { zoomControl: false, attributionControl: true, minZoom: 1 })
         .setView([35.6895, 139.6917], 14);
 
-    // 通常カラー地図
-    normalLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    // 通常カラー地図（OpenStreetMap）
+    normalLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
+    });
 
-    // グレーマップ
-    grayLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
-        maxZoom: 20
+    // 需要ON時のグレー地図（OpenFreeMap Positron／APIキー不要）
+    grayLayer = L.maplibreGL({
+        style: 'https://tiles.openfreemap.org/styles/positron',
+        attribution: '&copy; <a href="https://openfreemap.org/">OpenFreeMap</a> &copy; OpenMapTiles &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
     });
 
     normalLayer.addTo(map);
@@ -1487,18 +1495,31 @@ let normalLayer
 let grayLayer
 
 async function loadPrediction(){
+  if (!heatEnabled || !map) return;
 
-const res=await fetch(GAS_URL+"?mode=predict")
+  try {
+    const res = await fetch(GAS_URL + "?mode=predict", { cache: "no-store" });
+    if (!res.ok) throw new Error("需要データ取得失敗: HTTP " + res.status);
 
-const data=await res.json()
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error("需要データの形式が正しくありません");
+    }
 
-drawHeatmap(data)
-
+    drawHeatmap(data);
+  } catch (err) {
+    console.error("需要ヒートマップ取得エラー:", err);
+  }
 }
 
 function drawHeatmap(points){
 
-  if(!points || points.length === 0) return;
+  if (!Array.isArray(points)) return;
+  if (points.length === 0) {
+    if (heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+    heatLayer = null;
+    return;
+  }
 
   // ===== グリッド化（見えるようにする核心）=====
   const grid = {};
@@ -1844,9 +1865,9 @@ if(heatEnabled){
 heatBtn.innerText="需要ON 🔥"
 heatBtn.classList.add("bg-red-500","text-white")
 
-// 地図をグレーに
-map.removeLayer(normalLayer)
-grayLayer.addTo(map)
+// 地図をグレーに切り替え
+if (map.hasLayer(normalLayer)) map.removeLayer(normalLayer);
+if (!map.hasLayer(grayLayer)) grayLayer.addTo(map);
 
 loadPrediction()
 
@@ -1856,10 +1877,11 @@ heatBtn.innerText="需要OFF"
 heatBtn.classList.remove("bg-red-500","text-white")
 
 // 地図をカラーに戻す
-map.removeLayer(grayLayer)
-normalLayer.addTo(map)
+if (map.hasLayer(grayLayer)) map.removeLayer(grayLayer);
+if (!map.hasLayer(normalLayer)) normalLayer.addTo(map);
 
-if(heatLayer) map.removeLayer(heatLayer)
+if(heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
+heatLayer = null;
 
 }
 
@@ -2031,29 +2053,7 @@ function spawnComment(text) {
 }
 // setInterval(fetchChat, 15000);
 
-        async function loadPrediction() {
-
-  const res = await fetch(GAS_URL + "?mode=predict");
-  const data = await res.json();
-
-  console.log(data);
-
-  if (heatLayer) {
-    map.removeLayer(heatLayer);
-  }
-
-  const heatData = data.map(item => [
-    item.lat,
-    item.lng,
-    item.amount
-  ]);
-
-  heatLayer = L.heatLayer(heatData, {
-    radius: 25,
-    blur: 15
-  }).addTo(map);
-}
-
+        // loadPrediction() は上部で一度だけ定義（重複定義による上書きを防止）
 
 function updateDrivers(drivers) {
 
