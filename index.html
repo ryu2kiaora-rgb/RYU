@@ -1937,6 +1937,61 @@ loadPrediction()
 },600000)
 
 
+// 通知音（音声ファイル不要・ブラウザ内で生成）
+let notificationAudioContext = null;
+let notificationAudioUnlocked = false;
+let chatSyncInitialized = false;
+let eventsSyncInitialized = false;
+
+function unlockNotificationAudio() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!notificationAudioContext) notificationAudioContext = new AudioContextClass();
+    if (notificationAudioContext.state === "suspended") {
+      notificationAudioContext.resume().then(() => {
+        notificationAudioUnlocked = notificationAudioContext.state === "running";
+      }).catch(() => {});
+    } else {
+      notificationAudioUnlocked = true;
+    }
+  } catch (e) {
+    console.warn("通知音を初期化できません:", e);
+  }
+}
+
+// kind='chat' は短い2音、kind='event' は少し目立つ3音
+function playNotificationSound(kind) {
+  try {
+    unlockNotificationAudio();
+    const ctx = notificationAudioContext;
+    if (!ctx || ctx.state !== "running") return; // 初回ユーザー操作前はブラウザ制限で再生しない
+    const now = ctx.currentTime;
+    const notes = kind === "event"
+      ? [{ f: 880, t: 0, d: 0.13 }, { f: 1175, t: 0.16, d: 0.13 }, { f: 1397, t: 0.32, d: 0.18 }]
+      : [{ f: 740, t: 0, d: 0.11 }, { f: 988, t: 0.13, d: 0.14 }];
+    notes.forEach(note => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(note.f, now + note.t);
+      gain.gain.setValueAtTime(0.0001, now + note.t);
+      gain.gain.exponentialRampToValueAtTime(0.12, now + note.t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + note.t + note.d);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + note.t);
+      osc.stop(now + note.t + note.d + 0.02);
+    });
+  } catch (e) {
+    console.warn("通知音の再生に失敗しました:", e);
+  }
+}
+
+// ブラウザの自動再生制限に対応するため、最初のタップ/クリックで音声を解放
+window.addEventListener("pointerdown", unlockNotificationAudio, { once: true, passive: true });
+window.addEventListener("keydown", unlockNotificationAudio, { once: true });
+
 // チャット機能
 let uid = localStorage.getItem("rideconnect_uid");
         let shownChatIds = {}; // ←ここ
@@ -2061,11 +2116,16 @@ function renderChat(data) {
         spawnComment(`💬 ${name}: ${msg.text}`);
       }, 100);
 
+      // 初回同期では過去メッセージで鳴らさず、2回目以降の他人の新着だけ通知
+      if (chatSyncInitialized && String(msg.uid) !== String(uid)) {
+        playNotificationSound("chat");
+      }
       shownChatIds[id] = true;
     }
 
   });
 
+  chatSyncInitialized = true;
   list.scrollTop = list.scrollHeight;
 
   // ★ここ改善
@@ -2229,6 +2289,9 @@ async function syncAll() {
 
     if (data.chat) {
       renderChat(data.chat);
+    } else {
+      // 最初の同期でチャットが0件でも、次に届くメッセージを新着として通知できるようにする
+      chatSyncInitialized = true;
     }
 
     if (data.events) {
@@ -2237,8 +2300,16 @@ async function syncAll() {
         if (shownEvents[ev.id]) return;
 
         shownEvents[ev.id] = true;
+        // 初回同期の過去イベントでは鳴らさず、他の人の新しい乗車開始/到着だけ通知
+        if (eventsSyncInitialized && String(ev.uid) !== String(user.uid) &&
+            (ev.type === "start" || ev.type === "end") && String(ev.message || "").trim()) {
+          playNotificationSound("event");
+        }
         showMapPerformance(ev);
       });
+      eventsSyncInitialized = true;
+    } else {
+      eventsSyncInitialized = true;
     }
 
     lastSyncTime = data.now;
