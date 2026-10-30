@@ -1513,59 +1513,46 @@ async function loadPrediction(){
 }
 
 function drawHeatmap(points){
-
   if (!Array.isArray(points)) return;
-  if (points.length === 0) {
-    if (heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
-    heatLayer = null;
-    return;
+
+  // 予測データが空なら、以前のヒートマップを残さず消す
+  if (heatLayer && map.hasLayer(heatLayer)) {
+    map.removeLayer(heatLayer);
   }
+  heatLayer = null;
 
-  // ===== グリッド化（見えるようにする核心）=====
-  const grid = {};
+  // GASが計算した需要の重み(weight)を、そのままヒートマップに反映
+  // distance=0 の記録も、GAS側で有効な乗車地点として判定されれば利用される
+  const heatData = points
+    .filter(p => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
+    .map(p => {
+      const lat = Number(p.lat);
+      const lng = Number(p.lng);
+      const weight = Number(p.weight);
 
-  points.forEach(p => {
+      // 埼玉・近隣地域の地図表示に対する座標の安全確認
+      if (lat < 34 || lat > 37 || lng < 138 || lng > 141) return null;
+      if (!Number.isFinite(weight) || weight <= 0) return null;
 
-    if(!p.lat || !p.lng) return;
+      return [lat, lng, Math.max(0.05, Math.min(weight, 1))];
+    })
+    .filter(Boolean);
 
-    const key =
-      Math.floor(p.lat * 100) / 100 + "_" +
-      Math.floor(p.lng * 100) / 100;
+  if (heatData.length === 0) return;
 
-    if(!grid[key]){
-      grid[key] = { lat:0, lng:0, count:0, amount:0 };
-    }
-
-    grid[key].lat += p.lat;
-    grid[key].lng += p.lng;
-    grid[key].count += 1;
-    grid[key].amount += p.amount || 1;
-  });
-
-const heatData = Object.values(grid).map(g => [
-  g.lat / g.count,
-  g.lng / g.count,
-  Math.min(g.count * 0.7, 1)
-]);
-
-  // ===== 既存削除 =====
-  if(heatLayer) map.removeLayer(heatLayer);
-
-  // ===== ズームでサイズ変える =====
+  // ズームに応じて表示半径を調整
   const zoom = map.getZoom();
+  const radius = zoom < 13 ? 26 : zoom < 15 ? 21 : zoom < 17 ? 16 : 11;
 
-  const radius =
-    zoom < 13 ? 25 :
-    zoom < 15 ? 20 :
-    zoom < 17 ? 15 : 10;
-
-  // ===== 描画 =====
   heatLayer = L.heatLayer(heatData, {
     radius: radius,
-    blur: 15,
-    maxZoom: 17
+    blur: 16,
+    max: 1,
+    maxZoom: 17,
+    minOpacity: 0.25
   }).addTo(map);
-}        
+}
+
 function createMarkerHtml(name, status) {
 
     let color = '#3b82f6';
