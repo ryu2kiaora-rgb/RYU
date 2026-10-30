@@ -207,35 +207,19 @@ min-width: 140px;         /* ★ 100px から 140px にアップ（最低限の�
 }
         
     
+/* 周辺イベント・鉄道情報テロップ */
+#impactTicker{position:fixed;top:56px;left:0;right:0;z-index:1090;height:30px;background:#172554;color:#fff;display:flex;align-items:center;overflow:hidden;font-size:12px;box-shadow:0 2px 5px #0003}
+#impactTicker .impact-label{flex:0 0 auto;background:#dc2626;padding:6px 9px;font-weight:800;height:100%;display:flex;align-items:center}
+#impactTicker button{color:inherit;white-space:nowrap;overflow:hidden;text-align:left;padding:0 10px;flex:1;min-width:0;display:block}
+#impactTickerText{animation:impactMarquee 34s linear infinite}
+#impactTickerText:hover{animation-play-state:paused}
+@keyframes impactMarquee{0%{transform:translateX(0)}100%{transform:translateX(-45%)}}
+#impactTicker.impact-warn{background:#7f1d1d}#impactTicker.impact-ok{background:#164e63}#impactTicker.impact-error{background:#44403c}
 
-        /* 初回利用時の注意事項・同意画面 */
-        #first-use-consent {
-            position: fixed; inset: 0; z-index: 20000;
-            display: flex; align-items: center; justify-content: center;
-            padding: 12px; padding-top: max(12px, env(safe-area-inset-top));
-            padding-bottom: max(12px, env(safe-area-inset-bottom));
-            background: rgba(15, 23, 42, .88); backdrop-filter: blur(5px);
-        }
-        #first-use-consent.consent-hidden { display: none !important; }
-        .consent-card {
-            width: min(720px, 100%); max-height: 94dvh; display: flex; flex-direction: column;
-            overflow: hidden; background: #fff; border-radius: 20px;
-            box-shadow: 0 25px 70px rgba(0,0,0,.35);
-        }
-        .consent-tab { border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 800; color: #475569; background: #f8fafc; }
-        .consent-tab.active { color: #fff; background: #2563eb; border-color: #2563eb; }
-        .consent-copy { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; color: #334155; font-size: 13px; line-height: 1.75; }
-        .consent-copy h3 { margin: 0 0 5px; color: #0f172a; font-size: 14px; font-weight: 900; }
-        .consent-copy section { margin-bottom: 16px; }
-        #consent-start:disabled { opacity: .42; cursor: not-allowed; }
-        @media (max-height: 600px) {
-            .consent-card { max-height: 97dvh; }
-            .consent-copy { padding: 10px 14px; }
-        }
-
-    </style>
+</style>
 </head>
 <body class="bg-gray-100 font-sans overflow-hidden">
+<div id="impactTicker" class="impact-error"><span class="impact-label">周辺情報</span><button type="button" id="impactTickerText" onclick="showImpactDetails()">周辺イベント・鉄道情報を確認しています…</button></div>
 
     <header class="bg-slate-800 text-white p-3 flex justify-between items-center shadow-md relative z-[1100]">
         <h1 class="text-lg font-bold">RideShare <span class="text-blue-400">Connect</span></h1>
@@ -2893,91 +2877,51 @@ setInterval(renderCanvas, 100);
 </script>
 
 
-
-<!-- 初回利用時の注意事項・同意確認：GAS変更不要、ブラウザごとに保存 -->
-<div id="first-use-consent" role="dialog" aria-modal="true" aria-labelledby="consent-title">
-  <div class="consent-card">
-    <header class="px-5 pt-5 pb-3 border-b border-slate-200 shrink-0">
-      <div class="flex items-center gap-3 mb-2">
-        <div class="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl"><i class="fas fa-shield-alt"></i></div>
-        <div>
-          <h2 id="consent-title" class="text-xl font-black text-slate-900">RideShare Connect Pro</h2>
-          <p class="text-sm font-bold text-slate-500">ご利用前にご確認ください</p>
-        </div>
-      </div>
-      <p class="text-xs text-slate-600">使い方と利用上の注意を確認し、同意チェックを入れるとアプリを利用できます。</p>
-    </header>
-
-    <nav class="grid grid-cols-2 gap-2 px-4 pt-3 shrink-0" aria-label="確認内容">
-      <button type="button" class="consent-tab active" data-consent-tab="usage">基本的な使い方</button>
-      <button type="button" class="consent-tab" data-consent-tab="cautions">利用上の注意</button>
-    </nav>
-
-    <div id="consent-usage" class="consent-copy">
-      <section><h3>1. シフト開始</h3><p>画面の案内に従って利用者名などを設定し、「シフト開始」を押します。位置情報を使う機能では、端末・ブラウザの位置情報利用を許可してください。</p></section>
-      <section><h3>2. 位置情報・乗車状況</h3><p>アプリの案内に従って乗車開始・降車完了などを操作します。位置情報や乗車状況は、機能の設定・共有先に応じて他の利用者に表示される場合があります。</p></section>
-      <section><h3>3. 需要表示・需要予測</h3><p>地図の「需要」ボタンで需要表示を切り替えます。予測時間の選択肢が表示される場合は、「現在」「30分後」「1時間後」などを選んで参考にしてください。</p></section>
-      <section><h3>4. チャット・通知音</h3><p>チャットボタンからメッセージ画面を開けます。新着メッセージや乗車イベントなどの通知音は、端末の音量やブラウザ設定によって鳴らない場合があります。</p></section>
-      <section><h3>5. 売上などの情報</h3><p>各タブで表示される情報を確認してください。操作ボタンの名称や表示内容は、アプリの更新によって変更される場合があります。</p></section>
-      <div class="rounded-xl bg-blue-50 border border-blue-100 p-3 text-xs text-blue-900"><strong>安全のために：</strong>走行中はスマートフォンを操作せず、確認や入力は安全な場所に停車してから行ってください。</div>
-    </div>
-
-    <div id="consent-cautions" class="consent-copy hidden">
-      <section><h3>1. アプリの目的</h3><p>本アプリは、ライドシェア業務における情報共有や営業活動の参考情報を提供する支援ツールです。表示情報の正確性・完全性・即時性を保証するものではありません。</p></section>
-      <section><h3>2. GPS・位置情報</h3><ul class="list-disc pl-5"><li>GPS精度は、建物の間、高架下、トンネル、地下、天候や端末環境などにより低下することがあります。</li><li>位置の表示・更新に遅延が生じたり、実際の位置と異なったりする場合があります。</li><li>位置情報共有機能を使うと、位置情報が他の利用者に表示される場合があります。</li></ul></section>
-      <section><h3>3. 乗車状況・イベント・通知</h3><p>通信障害や更新間隔などにより、乗車状況やイベント表示が遅れたり、通知音・チャット表示が動作しなかったりする場合があります。通知の有無だけで他の利用者の状況を判断しないでください。</p></section>
-      <section><h3>4. 需要予測</h3><p>需要予測は過去の乗車実績などをもとにした推定情報です。実際の需要を保証するものではなく、データが少ない時間帯・地域や、天候・イベント・交通状況などにより予測と実態が大きく異なる場合があります。営業判断の参考として利用してください。</p></section>
-      <section><h3>5. 通信・データ</h3><p>一部機能はインターネット通信を必要とします。通信障害、サーバー障害、端末の設定や不具合などにより、データの保存・表示・更新ができない場合があります。必要な業務記録は本アプリだけに依存せず、必要に応じて別途保存してください。</p></section>
-      <section><h3>6. 安全上の注意</h3><p><strong>運転中にスマートフォンを操作しないでください。</strong>画面確認、文字入力、チャット送信などは、安全な場所に停車してから行い、交通法規と安全運転を最優先してください。</p></section>
-      <section><h3>7. 免責事項</h3><p>本アプリは情報共有・営業活動を支援する目的で提供されます。利用者は表示情報の限界を理解し、自身の判断と責任で利用してください。法令上認められる範囲で、アプリの利用または利用不能により生じた損害について、開発者は責任を負わないものとします。ただし、開発者の故意・重過失など、適用法令上免責が認められない場合はこの限りではありません。</p></section>
-      <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900"><strong>データの取り扱いについて：</strong>位置情報・チャット・乗車情報などの保存先や共有範囲は、アプリの機能・設定に依存します。共有される可能性がある情報を理解したうえで利用してください。</div>
-    </div>
-
-    <footer class="border-t border-slate-200 p-4 shrink-0 bg-white">
-      <label class="flex items-start gap-3 text-sm text-slate-800 font-bold cursor-pointer mb-3">
-        <input id="consent-checkbox" type="checkbox" class="mt-1 w-5 h-5 shrink-0 accent-blue-600">
-        <span>基本的な使い方と利用上の注意を確認し、内容に同意します。</span>
-      </label>
-      <button id="consent-start" type="button" disabled class="w-full rounded-xl bg-blue-600 text-white font-black py-3.5 shadow-lg">同意して利用を開始</button>
-      <p class="text-[10px] text-slate-400 text-center mt-2">同意状態は、このブラウザに保存されます。</p>
-    </footer>
-  </div>
-</div>
-
 <script>
-(function () {
-  'use strict';
-  const CONSENT_KEY = 'rideconnect_first_use_consent_v1';
-  const overlay = document.getElementById('first-use-consent');
-  const checkbox = document.getElementById('consent-checkbox');
-  const startButton = document.getElementById('consent-start');
-  if (!overlay || !checkbox || !startButton) return;
-
-  let alreadyConsented = false;
-  try { alreadyConsented = localStorage.getItem(CONSENT_KEY) === 'accepted'; } catch (e) {}
-  if (alreadyConsented) overlay.classList.add('consent-hidden');
-
-  const tabButtons = overlay.querySelectorAll('[data-consent-tab]');
-  tabButtons.forEach(function (button) {
-    button.addEventListener('click', function () {
-      const target = button.getAttribute('data-consent-tab');
-      tabButtons.forEach(function (b) { b.classList.toggle('active', b === button); });
-      document.getElementById('consent-usage').classList.toggle('hidden', target !== 'usage');
-      document.getElementById('consent-cautions').classList.toggle('hidden', target !== 'cautions');
-    });
-  });
-
-  checkbox.addEventListener('change', function () { startButton.disabled = !checkbox.checked; });
-  startButton.addEventListener('click', function () {
-    if (!checkbox.checked) return;
-    try { localStorage.setItem(CONSENT_KEY, 'accepted'); }
-    catch (e) {
-      alert('同意状態を保存できませんでした。ブラウザの保存設定を確認して、もう一度お試しください。');
-      return;
+// ===== 周辺イベント・鉄道情報（15分ごとにGASキャッシュを確認） =====
+let impactDetails = null;
+function showImpactDetails(){
+  if(!impactDetails){ alert('周辺情報をまだ取得できていません。'); return; }
+  const lines=[];
+  lines.push('【鉄道情報】');
+  lines.push(impactDetails.railMessage || '状態を確認できません');
+  if(impactDetails.railUrl) lines.push('公式情報: '+impactDetails.railUrl);
+  lines.push(''); lines.push('【半径20km以内のイベント】');
+  if(Array.isArray(impactDetails.events) && impactDetails.events.length){
+    impactDetails.events.slice(0,12).forEach((e,i)=>lines.push((i+1)+'. '+(e.title||'イベント')+' / '+(e.date||'日程不明')+' / '+(e.location||'場所不明')+(e.url?'\n'+e.url:'')));
+  } else lines.push('対象範囲内のイベントを確認できませんでした。');
+  lines.push(''); lines.push('取得状態: '+(impactDetails.status||'不明'));
+  alert(lines.join('\n'));
+}
+async function refreshImpactTicker(){
+  try{
+    const lat=Number(currentLat), lng=Number(currentLng);
+    if(!Number.isFinite(lat)||!Number.isFinite(lng)||!lat||!lng){
+      document.getElementById('impactTickerText').textContent='現在地を取得すると、半径20km以内のイベント・鉄道情報を表示します'; return;
     }
-    overlay.classList.add('consent-hidden');
-  });
-})();
+    const url=GAS_URL+'?mode=impact&lat='+encodeURIComponent(lat)+'&lng='+encodeURIComponent(lng)+'&_='+Date.now();
+    const res=await fetch(url,{cache:'no-store'}); if(!res.ok) throw new Error('HTTP '+res.status);
+    const data=await res.json(); impactDetails=data;
+    const ticker=document.getElementById('impactTicker');
+    ticker.classList.remove('impact-warn','impact-ok','impact-error');
+    if(data.railStatus==='delay'||data.railStatus==='suspended') ticker.classList.add('impact-warn');
+    else if(data.status==='ok') ticker.classList.add('impact-ok'); else ticker.classList.add('impact-error');
+    const bits=[];
+    if(data.railStatus==='delay'||data.railStatus==='suspended') bits.push('【鉄道】'+(data.railMessage||'遅延等の情報あり'));
+    else bits.push('【鉄道】'+(data.railMessage||'運行情報を確認できません'));
+    if(data.events && data.events.length) bits.push('【周辺イベント】'+data.events.slice(0,4).map(e=>e.title+(e.location?'（'+e.location+'）':'')).join(' ／ '));
+    else bits.push('【イベント】対象範囲内の掲載イベントなし、または位置を特定できず');
+    bits.push('タップで詳細');
+    document.getElementById('impactTickerText').textContent=bits.join('　　');
+  }catch(err){
+    console.warn('周辺情報取得エラー',err);
+    const ticker=document.getElementById('impactTicker'); ticker.classList.remove('impact-warn','impact-ok'); ticker.classList.add('impact-error');
+    document.getElementById('impactTickerText').textContent='周辺情報を取得できません（最新状態は公式情報で確認してください）';
+  }
+}
+// GPS初期化に少し時間がかかる場合があるため、遅延実行と15分周期で更新
+setTimeout(refreshImpactTicker,5000);
+setInterval(refreshImpactTicker,15*60*1000);
 </script>
 
 </body>
