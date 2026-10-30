@@ -795,11 +795,26 @@ if(pos.coords.accuracy>200) return
 const lat = pos.coords.latitude
 const lng = pos.coords.longitude
 
+const isFirstGpsFix = (currentLat === null || currentLng === null)
 currentLat = lat
 currentLng = lng
 
 // ★ GASへ位置送信
 sendLocationToGAS()
+
+// ★初回GPS取得直後に周辺情報とオンライン人数を更新
+// 起動5秒後の周辺情報取得よりGPSが遅れた場合の取りこぼしを防ぐ
+if (isFirstGpsFix) {
+    if (typeof refreshImpactTicker === 'function') {
+        refreshImpactTicker();
+    }
+    // no-corsの位置POSTがGAS側に反映された後に人数を再取得
+    setTimeout(() => {
+        if (isShiftActive && currentLat !== null && currentLng !== null) {
+            fetchDrivers();
+        }
+    }, 1200);
+}
 
 if(!map) return
 
@@ -920,6 +935,8 @@ document.addEventListener("visibilitychange", () => {
             currentLng = pos.coords.longitude;
 
             syncStatusToFirestore(true);
+            sendLocationToGAS();
+            if (typeof refreshImpactTicker === 'function') refreshImpactTicker();
 
             // 他ドライバー更新
             fetchDrivers();
