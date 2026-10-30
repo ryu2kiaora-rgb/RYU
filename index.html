@@ -1494,19 +1494,23 @@ let heatEnabled=false
 let normalLayer
 let grayLayer
 
+// 予測時間：0=現在、30=30分後、60=1時間後
+let predictionMinutes = Number(localStorage.getItem("rideconnect_prediction_minutes") || 30);
+if (![0, 30, 60].includes(predictionMinutes)) predictionMinutes = 30;
+
 async function loadPrediction(){
   if (!heatEnabled || !map) return;
 
   try {
-    const res = await fetch(GAS_URL + "?mode=predict", { cache: "no-store" });
+    const url = GAS_URL + "?mode=predict&minutes=" + encodeURIComponent(predictionMinutes) + "&_=" + Date.now();
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("需要データ取得失敗: HTTP " + res.status);
 
     const data = await res.json();
-    if (!Array.isArray(data)) {
-      throw new Error("需要データの形式が正しくありません");
-    }
+    if (!Array.isArray(data)) throw new Error("需要データの形式が正しくありません");
 
     drawHeatmap(data);
+    updatePredictionLabel(data.length);
   } catch (err) {
     console.error("需要ヒートマップ取得エラー:", err);
   }
@@ -1514,43 +1518,44 @@ async function loadPrediction(){
 
 function drawHeatmap(points){
   if (!Array.isArray(points)) return;
-
-  // 予測データが空なら、以前のヒートマップを残さず消す
-  if (heatLayer && map.hasLayer(heatLayer)) {
-    map.removeLayer(heatLayer);
-  }
+  if (heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
   heatLayer = null;
+  if (points.length === 0) return;
 
-  // GASが計算した需要の重み(weight)を、そのままヒートマップに反映
-  // distance=0 の記録も、GAS側で有効な乗車地点として判定されれば利用される
-  const heatData = points
-    .filter(p => p && Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)))
-    .map(p => {
-      const lat = Number(p.lat);
-      const lng = Number(p.lng);
-      const weight = Number(p.weight);
+  // GASが計算した需要スコア(weight)を使い、単純な件数表示にしない
+  const grid = {};
+  points.forEach(p => {
+    const lat = Number(p.lat), lng = Number(p.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat === 0 || lng === 0) return;
+    const score = Math.max(0, Math.min(1, Number(p.weight ?? p.score ?? 0.1)));
+    if (score <= 0) return;
+    const key = Math.floor(lat * 200) / 200 + "_" + Math.floor(lng * 200) / 200;
+    if (!grid[key]) grid[key] = { lat:0, lng:0, weight:0, count:0 };
+    grid[key].lat += lat * score;
+    grid[key].lng += lng * score;
+    grid[key].weight += score;
+    grid[key].count++;
+  });
 
-      // 埼玉・近隣地域の地図表示に対する座標の安全確認
-      if (lat < 34 || lat > 37 || lng < 138 || lng > 141) return null;
-      if (!Number.isFinite(weight) || weight <= 0) return null;
+  const cells = Object.values(grid);
+  if (!cells.length) return;
+  const maxWeight = Math.max(...cells.map(g => g.weight));
+  const heatData = cells.map(g => [
+    g.lat / g.weight,
+    g.lng / g.weight,
+    Math.max(0.08, Math.min(1, g.weight / maxWeight))
+  ]);
 
-      return [lat, lng, Math.max(0.05, Math.min(weight, 1))];
-    })
-    .filter(Boolean);
-
-  if (heatData.length === 0) return;
-
-  // ズームに応じて表示半径を調整
   const zoom = map.getZoom();
-  const radius = zoom < 13 ? 26 : zoom < 15 ? 21 : zoom < 17 ? 16 : 11;
+  const radius = zoom < 13 ? 25 : zoom < 15 ? 20 : zoom < 17 ? 15 : 10;
+  heatLayer = L.heatLayer(heatData, { radius, blur: 15, maxZoom: 17 }).addTo(map);
+}
 
-  heatLayer = L.heatLayer(heatData, {
-    radius: radius,
-    blur: 16,
-    max: 1,
-    maxZoom: 17,
-    minOpacity: 0.25
-  }).addTo(map);
+function updatePredictionLabel(pointCount){
+  const label = document.getElementById("prediction-status");
+  if (!label) return;
+  const names = {0:"現在", 30:"30分後", 60:"1時間後"};
+  label.textContent = (names[predictionMinutes] || "30分後") + "の需要予測・地点 " + pointCount + "件";
 }
 
 function createMarkerHtml(name, status) {
@@ -1830,6 +1835,47 @@ function triggerConfetti() {
 
         // ===== ここに追加 =====
 
+// 需要予測時間セレクター（需要ON時のみ表示）
+const predictionSelect = document.createElement("select");
+predictionSelect.id = "prediction-time-select";
+predictionSelect.className = "px-3 py-2 rounded shadow text-sm font-bold bg-white";
+predictionSelect.style.position = "absolute";
+predictionSelect.style.right = "20px";
+predictionSelect.style.bottom = "126px";
+predictionSelect.style.zIndex = "1200";
+predictionSelect.style.display = "none";
+predictionSelect.setAttribute("aria-label", "需要予測時間");
+[
+  { value: "0", label: "現在の需要" },
+  { value: "30", label: "30分後を予測" },
+  { value: "60", label: "1時間後を予測" }
+].forEach(item => {
+  const option = document.createElement("option");
+  option.value = item.value;
+  option.textContent = item.label;
+  predictionSelect.appendChild(option);
+});
+predictionSelect.value = String(predictionMinutes);
+document.body.appendChild(predictionSelect);
+
+const predictionStatus = document.createElement("div");
+predictionStatus.id = "prediction-status";
+predictionStatus.className = "px-2 py-1 rounded text-xs font-bold";
+predictionStatus.style.position = "absolute";
+predictionStatus.style.right = "20px";
+predictionStatus.style.bottom = "168px";
+predictionStatus.style.zIndex = "1200";
+predictionStatus.style.display = "none";
+predictionStatus.style.background = "rgba(255,255,255,0.92)";
+predictionStatus.style.color = "#1f2937";
+document.body.appendChild(predictionStatus);
+
+predictionSelect.addEventListener("change", () => {
+  predictionMinutes = Number(predictionSelect.value);
+  localStorage.setItem("rideconnect_prediction_minutes", String(predictionMinutes));
+  if (heatEnabled) loadPrediction();
+});
+
 const heatBtn=document.createElement("button")
 
 heatBtn.innerText="需要OFF"
@@ -1849,6 +1895,8 @@ heatEnabled=!heatEnabled
 
 if(heatEnabled){
 
+predictionSelect.style.display = "block";
+predictionStatus.style.display = "block";
 heatBtn.innerText="需要ON 🔥"
 heatBtn.classList.add("bg-red-500","text-white")
 
@@ -1860,6 +1908,8 @@ loadPrediction()
 
 }else{
 
+predictionSelect.style.display = "none";
+predictionStatus.style.display = "none";
 heatBtn.innerText="需要OFF"
 heatBtn.classList.remove("bg-red-500","text-white")
 
