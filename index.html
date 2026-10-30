@@ -1944,7 +1944,17 @@ let uid = localStorage.getItem("rideconnect_uid");
 
 function toggleChat() {
   const panel = document.getElementById("chat-panel");
-  if (panel) panel.classList.toggle("open");
+  const chatButton = document.getElementById("chat-open-btn");
+  if (!panel) return;
+
+  panel.classList.toggle("open");
+  const isOpen = panel.classList.contains("open");
+
+  // チャット画面を開いている間は、右上のチャット起動ボタンを隠す
+  // 閉じたら再表示する
+  if (chatButton) {
+    chatButton.style.display = isOpen ? "none" : "flex";
+  }
 }
 
 async function sendChat() {
