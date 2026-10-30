@@ -2755,9 +2755,34 @@ setInterval(renderCanvas, 100);
 </div>
 
 <div id="chat-open-btn" onclick="toggleChat()" 
-     style="position:fixed; right:20px; bottom:130px; z-index:1500; width:60px; height:60px; background:#2563eb; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); cursor:pointer;">
+     style="position:fixed; right:20px; top:120px; bottom:auto; z-index:1500; width:60px; height:60px; background:#2563eb; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.3); cursor:pointer;">
     <i class="fas fa-comments fa-lg"></i>
 </div>
+
+<script>
+// チャットボタンを現在地ボタンのすぐ下に配置する
+(function () {
+  function positionChatButton() {
+    const locationButton = document.getElementById('btn-recenter');
+    const chatButton = document.getElementById('chat-open-btn');
+    if (!locationButton || !chatButton) return;
+
+    const rect = locationButton.getBoundingClientRect();
+    chatButton.style.position = 'fixed';
+    chatButton.style.top = (rect.bottom + 8) + 'px';
+    chatButton.style.right = Math.max(8, window.innerWidth - rect.right) + 'px';
+    chatButton.style.bottom = 'auto';
+  }
+
+  window.addEventListener('load', positionChatButton);
+  window.addEventListener('resize', positionChatButton);
+  window.addEventListener('orientationchange', function () {
+    setTimeout(positionChatButton, 250);
+  });
+  // レイアウト確定後にも位置を合わせる
+  setTimeout(positionChatButton, 0);
+})();
+</script>
 
 </body>
 </html>
